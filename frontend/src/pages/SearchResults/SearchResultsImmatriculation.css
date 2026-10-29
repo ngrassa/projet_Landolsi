@@ -1,0 +1,225 @@
+
+/* =================================
+   PAGE
+================================= */
+
+.search-results-immat-page {
+    min-height: 100vh;
+    padding: 50px 0;
+    background: #f7f7f7;
+}
+
+
+/* =================================
+   TITRE
+================================= */
+
+.search-results-immat-page h1 {
+    margin-bottom: 35px;
+    color: #111;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+
+/* =================================
+   MESSAGE
+================================= */
+
+.search-results-immat-message {
+    padding: 30px;
+    text-align: center;
+    background: #fff;
+    border-radius: 12px;
+}
+
+.search-results-immat-message p {
+    margin: 0;
+    color: #555;
+}
+
+
+/* =================================
+   VÉHICULE
+================================= */
+
+.vehicule-result-card {
+    display: flex;
+    gap: 30px;
+
+    margin-bottom: 45px;
+    padding: 25px;
+
+    background: #fff;
+    border-radius: 14px;
+
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+
+/* Image véhicule */
+
+.vehicule-result-image {
+    width: 280px;
+    min-width: 280px;
+    height: 200px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #f5f5f5;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.vehicule-result-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+
+/* Informations */
+
+.vehicule-result-info {
+    flex: 1;
+}
+
+.vehicule-result-label {
+    display: inline-block;
+
+    margin-bottom: 8px;
+
+    color: #e30613;
+
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.vehicule-result-info h2 {
+    margin: 0 0 15px;
+
+    color: #111;
+
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.vehicule-result-info p {
+    margin: 8px 0;
+
+    color: #555;
+    font-size: 15px;
+}
+
+.vehicule-result-info strong {
+    color: #222;
+}
+
+
+/* =================================
+   PNEUS
+================================= */
+
+.pneus-result-section {
+    margin-top: 20px;
+}
+
+.pneus-result-section h2 {
+    margin-bottom: 8px;
+
+    color: #111;
+
+    font-size: 26px;
+    font-weight: 700;
+}
+
+
+/* Compteur */
+
+.search-results-immat-count {
+    margin-bottom: 25px;
+
+    color: #777;
+    font-size: 15px;
+}
+
+
+/* =================================
+   GRILLE PNEUS
+================================= */
+
+.search-results-immat-grid {
+    display: grid;
+
+    grid-template-columns: repeat(
+        auto-fill,
+        minmax(260px, 1fr)
+    );
+
+    gap: 25px;
+}
+
+
+/* =================================
+   AUCUN RÉSULTAT
+================================= */
+
+.search-results-immat-no-results {
+    padding: 30px;
+
+    background: #fff;
+
+    border-radius: 12px;
+
+    text-align: center;
+}
+
+.search-results-immat-no-results p {
+    margin: 0;
+    color: #666;
+}
+
+
+/* =================================
+   RESPONSIVE
+================================= */
+
+@media (max-width: 768px) {
+
+    .search-results-immat-page {
+        padding: 30px 15px;
+    }
+
+
+    .search-results-immat-page h1 {
+        font-size: 26px;
+    }
+
+
+    .vehicule-result-card {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+
+    .vehicule-result-image {
+        width: 100%;
+        min-width: 0;
+        height: 220px;
+    }
+
+
+    .vehicule-result-info h2 {
+        font-size: 22px;
+    }
+
+
+    .search-results-immat-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
+

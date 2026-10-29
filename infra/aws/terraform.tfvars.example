@@ -1,0 +1,23 @@
+# Copier vers terraform.tfvars (ignoré par Git) et adapter.
+aws_region       = "us-east-1"
+instance_type    = "t3.small"
+key_name         = "vockey"
+# Clé SSH supplémentaire injectée par cloud-init (ImportKeyPair interdit dans le lab) :
+# ssh_public_key = "ssh-ed25519 AAAA... vous@poste"
+
+# AWS Academy : créer le Security Group avec l'AWS CLI puis indiquer son id
+# (voir docs/deployment/aws-academy-deployment.md §2)
+# security_group_id = "sg-0123456789abcdef0"
+
+# Votre IP publique : curl -s https://checkip.amazonaws.com
+ssh_allowed_cidr = "203.0.113.10/32"
+
+# AWS Academy Learner Lab
+iam_instance_profile = "LabInstanceProfile"
+
+allocate_eip     = false
+root_volume_size = 20
+
+# Amorçage automatique (dépôt public uniquement). Laisser vide pour une installation manuelle.
+git_repo_url = ""
+git_ref      = "master"

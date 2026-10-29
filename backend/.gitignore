@@ -1,0 +1,6 @@
+node_modules/
+
+# Secrets : ne jamais versionner (voir .env.example)
+.env
+.env.*
+!.env.example

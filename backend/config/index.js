@@ -1,0 +1,118 @@
+const path = require("path");
+
+// =====================================================
+// CHARGEMENT DE LA CONFIGURATION
+// =====================================================
+// En développement, les variables viennent de backend/.env.
+// En production (systemd), elles viennent de EnvironmentFile=
+// et dotenv n'écrase jamais une variable déjà définie.
+
+require("dotenv").config({
+    path: process.env.ENV_FILE || path.join(__dirname, "..", ".env"),
+    quiet: true
+});
+
+const env = process.env;
+
+const NODE_ENV = env.NODE_ENV || "development";
+const isProduction = NODE_ENV === "production";
+
+const toBool = (value, defaultValue) => {
+    if (value === undefined || value === "") return defaultValue;
+    return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+};
+
+const toInt = (value, defaultValue) => {
+    const n = parseInt(value, 10);
+    return Number.isNaN(n) ? defaultValue : n;
+};
+
+// Ancien secret codé en dur : conservé uniquement pour le développement
+// local afin de ne pas casser les sessions existantes.
+const DEV_JWT_SECRET = "net pneus secret";
+
+const config = {
+    nodeEnv: NODE_ENV,
+    isProduction,
+
+    host: env.HOST || undefined,
+    port: toInt(env.PORT, 5001),
+    trustProxy: toBool(env.TRUST_PROXY, isProduction),
+
+    corsOrigins: (env.CORS_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+
+    jwtSecret: env.JWT_SECRET || (isProduction ? undefined : DEV_JWT_SECRET),
+    cookieSecure: toBool(env.COOKIE_SECURE, isProduction),
+
+    db: {
+        name: env.DB_NAME,
+        user: env.DB_USER,
+        password: env.DB_PASSWORD,
+        host: env.DB_HOST || "localhost",
+        port: toInt(env.DB_PORT, 5432),
+        ssl: toBool(env.DB_SSL, false),
+        sslRejectUnauthorized: toBool(env.DB_SSL_REJECT_UNAUTHORIZED, true),
+        poolMax: toInt(env.DB_POOL_MAX, 10),
+        // alter : comportement historique (modifie le schéma au démarrage)
+        // safe  : crée uniquement les tables manquantes
+        // none  : aucune synchronisation, schéma géré par les migrations
+        sync: (env.DB_SYNC || (isProduction ? "none" : "alter")).toLowerCase()
+    },
+
+    uploadDir: path.resolve(
+        env.UPLOAD_DIR || path.join(__dirname, "..", "public", "uploadPneu")
+    ),
+
+    telegramPollingEnabled: toBool(env.TELEGRAM_POLLING_ENABLED, true)
+};
+
+// =====================================================
+// VALIDATION
+// =====================================================
+
+function validateConfig() {
+    const errors = [];
+
+    for (const key of ["DB_NAME", "DB_USER", "DB_PASSWORD"]) {
+        if (!env[key]) errors.push(`${key} est obligatoire`);
+    }
+
+    if (!["alter", "safe", "none"].includes(config.db.sync)) {
+        errors.push("DB_SYNC doit valoir alter, safe ou none");
+    }
+
+    if (isProduction) {
+        if (!env.JWT_SECRET) {
+            errors.push("JWT_SECRET est obligatoire en production");
+        } else if (env.JWT_SECRET === DEV_JWT_SECRET || env.JWT_SECRET.length < 32) {
+            errors.push("JWT_SECRET doit être un secret aléatoire d'au moins 32 caractères");
+        }
+
+        if (config.db.sync === "alter") {
+            errors.push("DB_SYNC=alter est interdit en production; utilisez les migrations");
+        }
+    }
+
+    if (errors.length) {
+        const error = new Error(
+            "Configuration invalide :\n - " + errors.join("\n - ")
+        );
+        error.code = "CONFIG_INVALID";
+        throw error;
+    }
+
+    if (!isProduction && !env.JWT_SECRET) {
+        console.warn("⚠️ JWT_SECRET absent : secret de développement utilisé.");
+    }
+
+    if (isProduction && !config.cookieSecure) {
+        console.warn("⚠️ COOKIE_SECURE=false : le cookie de session circule sans HTTPS.");
+    }
+}
+
+config.validate = validateConfig;
+
+module.exports = config;

@@ -1,0 +1,215 @@
+/* =================================
+LISTE DES SAISONS
+================================= */
+
+.saisons-list {
+display: flex;
+flex-direction: column;
+gap: 14px;
+margin-top: 25px;
+}
+
+/* =================================
+OPTION SAISON
+================================= */
+
+.saison-option {
+width: 100%;
+
+display: flex;
+align-items: center;
+
+padding: 16px 18px;
+
+background: #fff;
+
+border: 1px solid #e5e5e5;
+
+border-radius: 12px;
+
+cursor: pointer;
+
+text-align: left;
+
+transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+
+
+}
+
+/* =================================
+HOVER
+================================= */
+
+.saison-option:hover {
+
+
+transform: translateY(-2px);
+
+border-color: #C8102E;
+
+box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+
+
+}
+
+/* =================================
+ICÔNE
+================================= */
+
+.saison-option-icon {
+
+
+width: 48px;
+height: 48px;
+
+min-width: 48px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+background: #f5f5f5;
+
+border-radius: 50%;
+
+color: #C8102E;
+
+font-size: 22px;
+
+margin-right: 15px;
+
+
+}
+
+/* =================================
+4 SAISONS
+================================= */
+
+.saison-four {
+
+
+font-size: 20px;
+
+font-weight: 800;
+
+color: #C8102E;
+
+
+}
+
+/* =================================
+CONTENU
+================================= */
+
+.saison-option-content {
+
+
+flex: 1;
+
+
+}
+
+.saison-option-content h3 {
+
+
+margin: 0 0 5px;
+
+font-size: 16px;
+
+font-weight: 700;
+
+color: #222;
+
+
+}
+
+.saison-option-content p {
+
+margin: 0;
+
+font-size: 13px;
+
+color: #777;
+
+
+}
+
+/* =================================
+FLÈCHE
+================================= */
+
+.saison-option-arrow {
+
+
+font-size: 28px;
+
+color: #999;
+
+margin-left: 10px;
+
+transition: color 0.2s ease;
+
+
+}
+
+.saison-option:hover .saison-option-arrow {
+
+
+color: #C8102E;
+
+
+}
+
+/* =================================
+MOBILE
+================================= */
+
+@media (max-width: 576px) {
+
+
+.saison-option {
+
+    padding: 14px;
+
+}
+
+
+.saison-option-icon {
+
+    width: 42px;
+    height: 42px;
+
+    min-width: 42px;
+
+    font-size: 19px;
+
+    margin-right: 12px;
+
+}
+
+
+.saison-option-content h3 {
+
+    font-size: 15px;
+
+}
+
+
+.saison-option-content p {
+
+    font-size: 12px;
+
+}
+
+
+.saison-option-arrow {
+
+    font-size: 24px;
+
+}
+
+
+}

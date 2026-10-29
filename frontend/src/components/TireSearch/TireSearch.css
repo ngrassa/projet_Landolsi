@@ -1,0 +1,103 @@
+.tire-search {
+  padding: 60px 8%;
+  background: #ffffff;
+}
+
+
+.search-container {
+  text-align: center;
+}
+
+
+.search-container h2 {
+  font-size: 32px;
+  color: #111;
+  margin-bottom: 15px;
+}
+
+
+.search-container p {
+  color: #1a1818;
+  margin-bottom: 35px;
+}
+
+
+
+.search-box {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.search-box select {
+  width: 180px;
+  height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 13px;
+  box-sizing: border-box;
+  background-color: #4b4949;
+  color: #e9dbdb;
+}
+
+.search-box button {
+  width: 120px;
+  height: 42px;
+  padding: 8px 10px;
+  background: #d71920;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-box button:hover {
+  background: #b31318;
+}
+
+/* Téléphones */
+@media (max-width: 768px) {
+  .search-box {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .search-box select,
+  .search-box button {
+    width: 100%;
+    max-width: 350px;
+  }
+}
+
+
+/* Responsive */
+@media (max-width: 992px) {
+  .search-box {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-box {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .search-box select,
+  .search-box button {
+    width: 100%;
+    max-width: 350px;
+  }
+}

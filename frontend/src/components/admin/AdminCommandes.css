@@ -1,0 +1,1252 @@
+/* ========================================
+   PAGE
+======================================== */
+
+.admin-commandes-page {
+    padding: 25px 30px;
+    width: 100%;
+}
+
+
+/* ========================================
+   HEADER
+======================================== */
+
+.commandes-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.commandes-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+
+/* ========================================
+   BOUTON DASHBOARD
+======================================== */
+
+.btn-retour-dashboard {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    border: none;
+    background-color: #333;
+    color: white;
+
+    padding: 11px 17px;
+    border-radius: 6px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-retour-dashboard:hover {
+    background-color: #222;
+}
+
+.btn-retour-dashboard svg {
+    font-size: 14px;
+}
+
+.commandes-page-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    margin: 0 0 6px;
+
+    font-size: 28px;
+    font-weight: 700;
+    color: #222;
+}
+
+.commandes-page-header h1 svg {
+    color: #d71920;
+}
+
+.commandes-page-header p {
+    margin: 0;
+
+    font-size: 14px;
+    color: #777;
+}
+
+
+/* ========================================
+   NOMBRE COMMANDES
+======================================== */
+
+.commandes-count {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    padding: 10px 16px;
+
+    background: #f8f8f8;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 8px;
+
+    font-size: 20px;
+    font-weight: 700;
+
+    color: #d71920;
+}
+
+.commandes-count span {
+    font-size: 13px;
+    font-weight: 500;
+
+    color: #666;
+}
+
+
+/* ========================================
+   LISTE
+======================================== */
+
+.commandes-list {
+    display: flex;
+    flex-direction: column;
+
+    gap: 30px;
+}
+
+
+/* ========================================
+   CARD COMMANDE
+======================================== */
+
+.commande-admin-card {
+    background: #fff;
+
+    border: 1px solid #e8e8e8;
+
+    border-radius: 12px;
+
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.05);
+
+    overflow: hidden;
+}
+
+
+/* ========================================
+   HEADER CARD
+======================================== */
+
+.commande-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    padding: 18px 20px;
+
+    border-bottom: 1px solid #eee;
+
+    background: #fafafa;
+}
+
+.commande-title {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+}
+
+.commande-title > svg {
+    font-size: 22px;
+
+    color: #d71920;
+}
+
+.commande-title h2 {
+    margin: 0 0 5px;
+
+    font-size: 17px;
+    font-weight: 700;
+
+    color: #222;
+}
+
+.commande-title span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    font-size: 12px;
+
+    color: #777;
+}
+
+.commande-title span svg {
+    font-size: 11px;
+}
+
+
+/* ========================================
+   SELECT STATUT
+======================================== */
+
+.status-select-wrapper {
+    position: relative;
+
+    display: inline-flex;
+    align-items: center;
+}
+
+.status-select {
+    appearance: none;
+    -webkit-appearance: none;
+
+    min-width: 155px;
+
+    padding: 8px 32px 8px 11px;
+
+    border: 1px solid #ddd;
+
+    border-radius: 7px;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    outline: none;
+
+    transition: 0.2s ease;
+
+    background: #fff;
+}
+
+.status-select:focus {
+    box-shadow:
+        0 0 0 3px rgba(215, 25, 32, 0.10);
+}
+
+
+/* ========================================
+   COULEURS STATUTS
+======================================== */
+
+.status-en-attente {
+    background: #fff4e5;
+    color: #b45309;
+    border-color: #f59e0b;
+}
+
+.status-confirmee {
+    background: #e8f7ee;
+    color: #16803c;
+    border-color: #22c55e;
+}
+
+.status-en-preparation {
+    background: #eaf3ff;
+    color: #2563eb;
+    border-color: #3b82f6;
+}
+
+.status-expediee {
+    background: #f3eefe;
+    color: #7c3aed;
+    border-color: #8b5cf6;
+}
+
+.status-livree {
+    background: #e7f8ef;
+    color: #15803d;
+    border-color: #16a34a;
+}
+
+.status-annulee {
+    background: #ffecec;
+    color: #d71920;
+    border-color: #ef4444;
+}
+
+
+/* ========================================
+   OPTIONS SELECT
+======================================== */
+
+.status-select option {
+    background: #fff;
+    color: #222;
+
+    font-weight: 500;
+}
+
+.status-select-wrapper > svg {
+    position: absolute;
+
+    right: 10px;
+
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    pointer-events: none;
+
+    font-size: 10px;
+
+    color: #555;
+}
+
+
+/* ========================================
+   SELECT DESACTIVE
+======================================== */
+
+.status-select:disabled {
+    cursor: not-allowed;
+
+    opacity: 0.85;
+}
+
+
+/* ========================================
+   INFORMATIONS CLIENT
+======================================== */
+
+.commande-client-section {
+    padding: 20px;
+
+    border-bottom: 1px solid #eee;
+}
+
+.commande-client-section h3,
+.commande-products-section h3 {
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+
+    margin: 0 0 16px;
+
+    font-size: 15px;
+    font-weight: 700;
+
+    color: #333;
+}
+
+.commande-client-section h3 svg,
+.commande-products-section h3 svg {
+    color: #d71920;
+}
+
+
+/* ========================================
+   CLIENT GRID
+======================================== */
+
+.client-info-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, 1fr);
+
+    gap: 15px;
+}
+
+.client-info {
+    display: flex;
+    align-items: flex-start;
+
+    gap: 10px;
+
+    min-width: 0;
+}
+
+.client-info > svg {
+    margin-top: 3px;
+
+    flex-shrink: 0;
+
+    font-size: 15px;
+
+    color: #d71920;
+}
+
+.client-info div {
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+
+    min-width: 0;
+}
+
+.client-info span {
+    font-size: 11px;
+
+    color: #888;
+}
+
+.client-info strong {
+    font-size: 13px;
+    font-weight: 600;
+
+    color: #333;
+
+    overflow-wrap: anywhere;
+}
+
+
+/* ========================================
+   PRODUITS
+======================================== */
+
+.commande-products-section {
+    padding: 20px;
+
+    border-bottom: 1px solid #eee;
+}
+
+.products-list {
+    display: flex;
+    flex-direction: column;
+
+    gap: 10px;
+}
+
+.commande-product {
+    display: grid;
+
+    grid-template-columns:
+        80px
+        minmax(180px, 1fr)
+        80px
+        130px;
+
+    align-items: center;
+
+    gap: 15px;
+
+    padding: 12px;
+
+    border: 1px solid #eee;
+
+    border-radius: 9px;
+
+    background: #fff;
+}
+
+
+/* ========================================
+   IMAGE PRODUIT
+======================================== */
+
+.product-image {
+    width: 80px;
+    height: 65px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    overflow: hidden;
+
+    border-radius: 7px;
+
+    background: #f6f6f6;
+}
+
+.product-image img {
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+}
+
+.product-image svg {
+    font-size: 25px;
+
+    color: #bbb;
+}
+
+
+/* ========================================
+   INFO PRODUIT
+======================================== */
+
+.product-info {
+    min-width: 0;
+}
+
+.product-info h4 {
+    margin: 0 0 7px;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    color: #222;
+}
+
+.product-info p {
+    margin: 2px 0;
+
+    font-size: 12px;
+
+    color: #777;
+}
+
+.product-info p strong {
+    color: #555;
+}
+
+
+/* ========================================
+   QUANTITE
+======================================== */
+
+.product-quantity {
+    display: flex;
+    flex-direction: column;
+
+    gap: 5px;
+
+    text-align: center;
+}
+
+.product-quantity span {
+    font-size: 11px;
+
+    color: #888;
+}
+
+.product-quantity strong {
+    font-size: 14px;
+
+    color: #333;
+}
+
+
+/* ========================================
+   PRIX
+======================================== */
+
+.product-price {
+    display: flex;
+    flex-direction: column;
+
+    align-items: flex-end;
+
+    gap: 3px;
+}
+
+.product-price strong {
+    font-size: 15px;
+
+    color: #222;
+}
+
+.old-price {
+    font-size: 11px;
+
+    color: #999;
+
+    text-decoration: line-through;
+}
+
+.promo-price {
+    color: #d71920 !important;
+
+    font-size: 15px;
+}
+
+.promo-badge {
+    display: inline-block;
+
+    padding: 3px 6px;
+
+    border-radius: 4px;
+
+    background: #d71920;
+
+    color: white;
+
+    font-size: 10px;
+    font-weight: 700;
+}
+
+
+/* ========================================
+   FOOTER COMMANDE
+======================================== */
+
+.commande-card-footer {
+    display: flex;
+
+    justify-content: space-between;
+    align-items: center;
+
+    gap: 20px;
+
+    padding: 15px 20px;
+
+    background: #fafafa;
+}
+
+
+/* ========================================
+   TOTAL
+======================================== */
+
+.commande-total {
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+
+    min-width: 0;
+}
+
+.commande-total span {
+    font-size: 13px;
+
+    color: #666;
+}
+
+.commande-total strong {
+    font-size: 18px;
+
+    color: #d71920;
+}
+
+
+/* ========================================
+   ACTIONS FOOTER
+======================================== */
+
+.commande-footer-actions {
+    display: flex;
+
+    align-items: center;
+    justify-content: flex-end;
+
+    gap: 10px;
+
+    margin-left: auto;
+
+    flex-shrink: 0;
+}
+
+
+/* ========================================
+   BOUTON FACTURE PDF
+======================================== */
+
+.facture-commande-btn {
+    width: 42px;
+    height: 42px;
+
+    padding: 0;
+    margin: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid #d71920;
+
+    border-radius: 7px;
+
+    background: #d71920;
+
+    color: #fff;
+
+    font-size: 17px;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.facture-commande-btn:hover {
+    background: #b9151b;
+
+    border-color: #b9151b;
+
+    transform: translateY(-1px);
+}
+
+
+/* ========================================
+   BOUTON SUPPRIMER
+======================================== */
+
+.delete-commande-btn {
+    height: 42px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 7px;
+
+    padding: 0 14px;
+
+    margin: 0;
+
+    border: 1px solid #f1b5b5;
+
+    border-radius: 7px;
+
+    background: #fff;
+
+    color: #d71920;
+
+    font-size: 12px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.delete-commande-btn:hover {
+    background: #d71920;
+
+    border-color: #d71920;
+
+    color: #fff;
+}
+
+
+/* ========================================
+   AUCUNE COMMANDE
+======================================== */
+
+.no-commandes {
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    min-height: 300px;
+
+    padding: 40px;
+
+    background: #fff;
+
+    border: 1px solid #eee;
+
+    border-radius: 12px;
+
+    text-align: center;
+}
+
+.no-commandes > svg {
+    margin-bottom: 15px;
+
+    font-size: 45px;
+
+    color: #ddd;
+}
+
+.no-commandes h2 {
+    margin: 0 0 8px;
+
+    font-size: 20px;
+
+    color: #333;
+}
+
+.no-commandes p {
+    margin: 0;
+
+    font-size: 13px;
+
+    color: #888;
+}
+
+
+/* ========================================
+   LOADING
+======================================== */
+
+.commandes-loading {
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    min-height: 300px;
+
+    color: #777;
+}
+
+.commandes-loading svg {
+    margin-bottom: 12px;
+
+    font-size: 35px;
+
+    color: #d71920;
+}
+
+.commandes-loading p {
+    margin: 0;
+
+    font-size: 14px;
+}
+
+
+/* ========================================
+   TABLETTE
+======================================== */
+
+@media (max-width: 1000px) {
+
+    .client-info-grid {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+
+    .commande-product {
+        grid-template-columns:
+            75px
+            minmax(150px, 1fr)
+            70px
+            110px;
+    }
+
+
+    .product-image {
+        width: 75px;
+        height: 60px;
+    }
+
+}
+
+
+/* ========================================
+   MOBILE
+======================================== */
+
+@media (max-width: 700px) {
+
+    .admin-commandes-page {
+        padding: 20px 15px;
+    }
+
+
+    .commandes-page-header {
+        align-items: flex-start;
+
+        gap: 15px;
+    }
+
+
+    .commandes-page-header h1 {
+        font-size: 22px;
+    }
+
+
+    .commandes-count {
+        padding: 8px 12px;
+
+        font-size: 17px;
+    }
+
+
+    .commandes-list {
+        gap: 22px;
+    }
+
+
+    .commande-card-header {
+        align-items: flex-start;
+
+        gap: 15px;
+    }
+
+
+    .commande-title h2 {
+        font-size: 15px;
+    }
+
+
+    .status-select {
+        min-width: 130px;
+
+        font-size: 12px;
+    }
+
+
+    .client-info-grid {
+        grid-template-columns: 1fr;
+
+        gap: 12px;
+    }
+
+
+    .commande-product {
+        grid-template-columns:
+            65px
+            1fr;
+
+        gap: 10px;
+    }
+
+
+    .product-image {
+        width: 65px;
+        height: 55px;
+
+        grid-row: span 2;
+    }
+
+
+    .product-quantity {
+        align-items: flex-start;
+
+        text-align: left;
+    }
+
+
+    .product-price {
+        align-items: flex-start;
+
+        text-align: left;
+    }
+
+
+    /* FOOTER MOBILE */
+
+    .commande-card-footer {
+        flex-direction: column;
+
+        align-items: stretch;
+
+        gap: 12px;
+    }
+
+
+    .commande-total {
+        justify-content: space-between;
+
+        width: 100%;
+    }
+
+
+    /* ACTIONS RESTENT SUR LA MÊME LIGNE */
+
+    .commande-footer-actions {
+        width: 100%;
+
+        display: flex;
+
+        flex-direction: row;
+
+        align-items: center;
+
+        justify-content: flex-end;
+
+        gap: 10px;
+
+        margin-left: 0;
+    }
+
+
+    /* PDF */
+
+    .facture-commande-btn {
+        width: 42px;
+
+        height: 42px;
+
+        flex-shrink: 0;
+    }
+
+
+    /* SUPPRIMER */
+
+    .delete-commande-btn {
+        width: auto;
+
+        min-width: 120px;
+
+        height: 42px;
+
+        flex-shrink: 0;
+    }
+
+}
+
+
+/* ========================================
+   PETIT MOBILE
+======================================== */
+
+@media (max-width: 420px) {
+
+    .commande-card-header {
+        flex-direction: column;
+    }
+
+
+    .status-select-wrapper {
+        width: 100%;
+    }
+
+
+    .status-select {
+        width: 100%;
+    }
+
+
+    .commande-client-section,
+    .commande-products-section {
+        padding: 15px;
+    }
+
+
+    .commande-card-footer {
+        padding: 13px 15px;
+    }
+
+
+    .commande-total strong {
+        font-size: 16px;
+    }
+
+
+    .commande-footer-actions {
+        justify-content: flex-end;
+
+        gap: 8px;
+    }
+
+
+    .facture-commande-btn {
+        width: 40px;
+
+        height: 40px;
+    }
+
+
+    .delete-commande-btn {
+        min-width: 115px;
+
+        height: 40px;
+
+        padding: 0 12px;
+    }
+
+}
+
+
+/* ========================================
+   HEADER RESPONSIVE
+======================================== */
+
+@media (max-width: 700px) {
+
+    .commandes-header-actions {
+        width: 100%;
+
+        flex-wrap: wrap;
+    }
+
+
+    .btn-retour-dashboard {
+        flex: 1;
+    }
+
+}
+
+
+
+
+
+/* ========================================
+   RECHERCHE ET FILTRES DES COMMANDES
+======================================== */
+
+.commandes-search-panel {
+    width: 100%;
+    max-width: 1250px;
+    margin: 0 auto 28px;
+    padding: 24px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 12px;
+    box-sizing: border-box;
+}
+
+.commandes-search-title {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 22px;
+}
+
+.commandes-search-title > svg {
+    color: #d62828;
+    font-size: 23px;
+    flex-shrink: 0;
+}
+
+.commandes-search-title h2 {
+    margin: 0 0 5px;
+    font-size: 19px;
+    color: #222;
+}
+
+.commandes-search-title p {
+    margin: 0;
+    color: #777;
+    font-size: 13px;
+}
+
+.commandes-search-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(150px, 1fr)) auto;
+    align-items: end;
+    gap: 16px;
+}
+
+.commandes-search-field {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.commandes-search-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+}
+
+.commandes-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 45px;
+    padding: 0 12px;
+    border: 1px solid #ddd;
+    border-radius: 7px;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.commandes-input-wrapper:focus-within {
+    border-color: #d62828;
+    box-shadow: 0 0 0 2px rgba(214, 40, 40, 0.08);
+}
+
+.commandes-input-wrapper > svg {
+    flex-shrink: 0;
+    color: #888;
+    font-size: 14px;
+}
+
+.commandes-input-wrapper input {
+    width: 100%;
+    min-width: 0;
+    min-height: 43px;
+    padding: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #222;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.commandes-search-actions {
+    display: flex;
+    align-items: end;
+}
+
+.btn-effacer-filtres {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 45px;
+    padding: 0 15px;
+    border: 1px solid #ddd;
+    border-radius: 7px;
+    background: #f7f7f7;
+    color: #333;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-effacer-filtres:hover:not(:disabled) {
+    background: #eee;
+    border-color: #bbb;
+}
+
+.btn-effacer-filtres:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.commandes-search-result {
+    margin: 17px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid #eee;
+    color: #666;
+    font-size: 13px;
+}
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+
+
+.commandes-search-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) minmax(180px, 1fr) auto;
+    gap: 16px;
+    align-items: end;
+}
+
+@media (max-width: 1000px) {
+    .commandes-search-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .commandes-search-actions {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 600px) {
+    .commandes-search-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .commandes-search-actions {
+        grid-column: auto;
+    }
+}

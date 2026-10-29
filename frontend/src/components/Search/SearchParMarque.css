@@ -1,0 +1,289 @@
+
+/* =================================
+   HEADER
+================================= */
+
+.dimension-header {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    margin-bottom: 20px;
+}
+
+
+.dimension-header-left {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+}
+
+
+.dimension-header-left h2 {
+    margin: 0;
+
+    color: #111;
+
+    font-size: 22px;
+
+    font-weight: 700;
+}
+
+
+/* =================================
+   BOUTON RETOUR
+================================= */
+
+.dimension-back {
+    width: 38px;
+
+    height: 38px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 50%;
+
+    background: #f1f1f1;
+
+    color: #222;
+
+    cursor: pointer;
+
+    transition: all 0.2s ease;
+}
+
+
+.dimension-back:hover {
+    background: #C8102E;
+
+    color: #fff;
+
+    transform: translateX(-2px);
+}
+
+
+/* =================================
+   BOUTON FERMER
+================================= */
+
+.dimension-close {
+    width: 40px;
+
+    height: 40px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 50%;
+
+    background: #f1f1f1;
+
+    color: #222;
+
+    cursor: pointer;
+
+    transition: all 0.2s ease;
+}
+
+
+.dimension-close:hover {
+    background: #C8102E;
+
+    color: #fff;
+}
+
+
+/* =================================
+   DESCRIPTION
+================================= */
+
+.dimension-description {
+    margin: 0 0 20px;
+
+    color: #777;
+
+    font-size: 14px;
+}
+
+
+/* =================================
+   LISTE DES MARQUES
+================================= */
+
+.marques-list {
+    display: grid;
+
+    grid-template-columns: repeat(3, 1fr);
+
+    gap: 14px;
+
+    margin-top: 20px;
+}
+
+
+/* =================================
+   CARTE MARQUE
+================================= */
+
+.marque-option {
+    width: 100%;
+
+    min-height: 115px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 10px;
+
+    padding: 15px;
+
+    background: #fff;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 12px;
+
+    cursor: pointer;
+
+    text-align: center;
+
+    transition: all 0.2s ease;
+}
+
+
+/* =================================
+   HOVER CARTE
+================================= */
+
+.marque-option:hover {
+    border-color: #C8102E;
+
+    background: #fff7f7;
+
+    transform: translateY(-3px);
+
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+
+/* =================================
+   LOGO
+================================= */
+
+.marque-option img {
+    width: 80px;
+
+    height: 50px;
+
+    object-fit: contain;
+
+    display: block;
+}
+
+
+/* =================================
+   NOM DE LA MARQUE
+================================= */
+
+.marque-option span {
+    color: #222;
+
+    font-size: 15px;
+
+    font-weight: 600;
+
+    line-height: 1.2;
+}
+
+
+/* =================================
+   NOM AU SURVOL
+================================= */
+
+.marque-option:hover span {
+    color: #C8102E;
+}
+
+
+/* =================================
+   RESPONSIVE TABLETTE
+================================= */
+
+@media (max-width: 768px) {
+
+    .marques-list {
+        grid-template-columns: repeat(2, 1fr);
+
+        gap: 12px;
+    }
+
+
+    .marque-option {
+        min-height: 110px;
+
+        padding: 12px;
+    }
+
+
+    .marque-option img {
+        width: 70px;
+
+        height: 45px;
+    }
+
+}
+
+
+/* =================================
+   RESPONSIVE MOBILE
+================================= */
+
+@media (max-width: 480px) {
+
+    .marques-list {
+        grid-template-columns: repeat(2, 1fr);
+
+        gap: 10px;
+    }
+
+
+    .marque-option {
+        min-height: 100px;
+
+        padding: 10px;
+    }
+
+
+    .marque-option img {
+        width: 60px;
+
+        height: 40px;
+    }
+
+
+    .marque-option span {
+        font-size: 14px;
+    }
+
+}
+

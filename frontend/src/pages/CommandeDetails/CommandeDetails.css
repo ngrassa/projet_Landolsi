@@ -1,0 +1,787 @@
+/* ========================================
+   PAGE
+======================================== */
+
+.commande-page {
+    min-height: 100vh;
+    background: #f5f5f5;
+    padding: 35px 20px 70px;
+    color: #1a1a1a;
+}
+
+
+.commande-container {
+    width: 100%;
+    max-width: 1200px;
+    margin: auto;
+}
+
+
+/* ========================================
+   BREADCRUMB
+======================================== */
+
+.commande-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 25px;
+    font-size: 14px;
+    color: #777;
+}
+
+.commande-breadcrumb a {
+    color: #555;
+    text-decoration: none;
+}
+
+.commande-breadcrumb a:hover {
+    color: #c8102e;
+}
+
+.commande-breadcrumb strong {
+    color: #222;
+}
+
+
+/* ========================================
+   SUCCESS CARD
+======================================== */
+
+.commande-success-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    border: 1px solid #e5e5e5;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+    margin-bottom: 20px;
+}
+
+
+.commande-success-icon {
+    width: 65px;
+    height: 65px;
+    border-radius: 50%;
+    background: #e8f7ed;
+    color: #1d9b4c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 35px;
+    flex-shrink: 0;
+}
+
+
+.commande-success-text {
+    flex: 1;
+}
+
+.commande-success-text h1 {
+    margin: 0 0 7px;
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.commande-success-text p {
+    margin: 0 0 4px;
+    color: #444;
+}
+
+.commande-success-text span {
+    color: #777;
+    font-size: 14px;
+}
+
+
+.commande-number {
+    text-align: right;
+    border-left: 1px solid #e5e5e5;
+    padding-left: 30px;
+}
+
+.commande-number span {
+    display: block;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 5px;
+}
+
+.commande-number strong {
+    font-size: 22px;
+    color: #c8102e;
+}
+
+
+/* ========================================
+   STATUS
+======================================== */
+
+.commande-status-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 24px 30px;
+    border: 1px solid #e5e5e5;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+
+.status-label {
+    display: block;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 5px;
+}
+
+.status-value {
+    color: #c8102e;
+    text-transform: capitalize;
+}
+
+
+.status-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    font-size: 13px;
+    color: #777;
+}
+
+
+.status-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+
+.status-circle.active {
+    background: #c8102e;
+    border-color: #c8102e;
+    color: white;
+}
+
+
+.status-line {
+    height: 2px;
+    width: 45px;
+    background: #ddd;
+}
+
+
+/* ========================================
+   GRID
+======================================== */
+
+.commande-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 350px;
+    gap: 25px;
+    align-items: start;
+}
+
+
+/* ========================================
+   CARD
+======================================== */
+
+.commande-card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 14px;
+    margin-bottom: 25px;
+    overflow: hidden;
+}
+
+
+.commande-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #eeeeee;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+
+.commande-card-header>div {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+
+.commande-card-header svg {
+    color: #c8102e;
+    font-size: 20px;
+}
+
+
+.commande-card-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+
+.commande-card-header span {
+    font-size: 13px;
+    color: #777;
+}
+
+
+/* ========================================
+   ITEM
+======================================== */
+
+.commande-item {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 22px 24px;
+    border-bottom: 1px solid #eeeeee;
+}
+
+
+.commande-item:last-child {
+    border-bottom: none;
+}
+
+
+.commande-item-image {
+    width: 110px;
+    height: 110px;
+    background: #f7f7f7;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+
+.commande-item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+
+.commande-item-info {
+    flex: 1;
+}
+
+
+.commande-item-info h3 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+
+.commande-item-info p {
+    margin: 0 0 7px;
+    color: #555;
+    font-size: 14px;
+}
+
+
+.commande-item-info span {
+    display: block;
+    color: #888;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+
+.commande-item-price {
+    text-align: right;
+}
+
+
+.commande-item-price span {
+    display: block;
+    color: #888;
+    font-size: 12px;
+    margin-bottom: 7px;
+}
+
+
+.commande-item-price strong {
+    font-size: 17px;
+    color: #111;
+}
+
+
+/* ========================================
+   LIVRAISON
+======================================== */
+
+.livraison-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 25px;
+}
+
+
+.livraison-icon {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: #fcebed;
+    color: #c8102e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.livraison-content strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+
+.livraison-content p {
+    margin: 4px 0;
+    color: #555;
+    font-size: 14px;
+}
+
+
+.livraison-content .telephone {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: #222;
+}
+
+
+/* ========================================
+   SIDEBAR
+======================================== */
+
+.commande-sidebar {
+    position: sticky;
+    top: 20px;
+}
+
+
+.commande-summary-card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 14px;
+    padding: 25px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.04);
+}
+
+
+.summary-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 20px;
+}
+
+
+.summary-header svg {
+    color: #c8102e;
+    font-size: 20px;
+}
+
+
+.summary-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+
+.summary-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+
+.summary-gray {
+    color: #888;
+}
+
+
+.summary-separator {
+    height: 1px;
+    background: #eee;
+    margin: 20px 0;
+}
+
+
+.summary-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+.summary-total span {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+
+.summary-total strong {
+    color: #c8102e;
+    font-size: 24px;
+}
+
+
+.summary-payment {
+    margin-top: 20px;
+    padding: 12px;
+    background: #f8f8f8;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 13px;
+    color: #666;
+}
+
+
+/* ========================================
+   BUTTONS
+======================================== */
+
+.commande-shopping-btn,
+.commande-home-btn,
+.commande-back-btn {
+    text-decoration: none;
+}
+
+
+.commande-shopping-btn {
+    margin-top: 15px;
+    width: 100%;
+    min-height: 50px;
+    background: #c8102e;
+    color: white;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+
+.commande-shopping-btn:hover {
+    background: #a90d27;
+    color: white;
+}
+
+
+.commande-home-btn {
+    margin-top: 10px;
+    width: 100%;
+    min-height: 48px;
+    background: white;
+    color: #222;
+    border: 1px solid #ddd;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+
+.commande-home-btn:hover {
+    border-color: #c8102e;
+    color: #c8102e;
+}
+
+
+/* ========================================
+   LOADING
+======================================== */
+
+.commande-loading {
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+
+.commande-loader {
+    width: 42px;
+    height: 42px;
+    border: 4px solid #ddd;
+    border-top-color: #c8102e;
+    border-radius: 50%;
+    animation: commandeSpin 0.8s linear infinite;
+}
+
+
+@keyframes commandeSpin {
+
+    to {
+        transform: rotate(360deg);
+    }
+
+}
+
+
+/* ========================================
+   ERROR
+======================================== */
+
+.commande-error {
+    max-width: 600px;
+    margin: 80px auto;
+    background: white;
+    padding: 40px;
+    text-align: center;
+    border-radius: 14px;
+    border: 1px solid #eee;
+}
+
+
+.commande-error h2 {
+    margin-bottom: 10px;
+}
+
+
+.commande-error p {
+    color: #777;
+    margin-bottom: 25px;
+}
+
+
+.commande-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: #c8102e;
+    color: white;
+    border-radius: 8px;
+}
+
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+
+@media (max-width: 900px) {
+
+    .commande-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .commande-sidebar {
+        position: static;
+    }
+
+}
+
+
+@media (max-width: 700px) {
+
+    .commande-page {
+        padding: 20px 12px 50px;
+    }
+
+
+    .commande-success-card {
+        flex-wrap: wrap;
+        padding: 22px;
+    }
+
+
+    .commande-number {
+        width: 100%;
+        text-align: left;
+        border-left: none;
+        border-top: 1px solid #eee;
+        padding-left: 0;
+        padding-top: 15px;
+    }
+
+
+    .commande-status-card {
+        flex-wrap: wrap;
+    }
+
+
+    .status-step {
+        margin-left: 0;
+    }
+
+
+    .status-line {
+        width: 20px;
+    }
+
+
+    .commande-item {
+        flex-wrap: wrap;
+    }
+
+
+    .commande-item-price {
+        width: 100%;
+        text-align: left;
+        padding-left: 130px;
+    }
+
+}
+
+
+@media (max-width: 500px) {
+
+    .commande-success-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 26px;
+    }
+
+
+    .commande-success-text h1 {
+        font-size: 21px;
+    }
+
+
+    .commande-card-header {
+        padding: 17px;
+    }
+
+
+    .commande-item {
+        padding: 18px;
+        gap: 14px;
+    }
+
+
+    .commande-item-image {
+        width: 85px;
+        height: 85px;
+    }
+
+
+    .commande-item-info h3 {
+        font-size: 15px;
+    }
+
+
+    .commande-item-price {
+        padding-left: 99px;
+    }
+
+
+    .commande-summary-card {
+        padding: 20px;
+    }
+
+
+}
+ .commande-item-price {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+}
+
+.commande-original-price {
+    color: #888;
+    font-size: 14px;
+    text-decoration: line-through;
+}
+
+.commande-promotion {
+    display: inline-block;
+    background-color: #d71920;
+    color: white;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.commande-promo-price {
+    color: #d71920;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.commande-normal-price {
+    color: #222;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.commande-item-total {
+    margin-top: 4px;
+    color: #111;
+    font-size: 18px;
+    font-weight: 700;
+}
+ .commande-facture-btn { width: 100%;
+     padding: 14px 18px;
+      border: none; 
+      border-radius: 8px;
+       background: #d71920;
+        color: white; 
+        font-size: 15px; 
+        font-weight: 600; 
+        
+        cursor: pointer;
+         margin-bottom: 12px; 
+         transition: 0.3s; } 
+         .commande-facture-btn:hover { 
+            background: #b9151b;
+             transform: translateY(-1px); }
+
+
+
+             .avis-deja-ajoute {
+    text-align: center;
+    padding: 20px;
+}
+
+.avis-deja-ajoute h3 {
+    margin-bottom: 10px;
+    color: #222;
+}
+
+.avis-deja-ajoute p {
+    color: #666;
+}
+
+.avis-pneu-item {
+    padding: 20px 0;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.avis-pneu-item:last-child {
+    border-bottom: none;
+}

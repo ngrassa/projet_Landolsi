@@ -1,0 +1,26 @@
+# Dépendances et builds
+node_modules/
+frontend/dist/
+
+# Secrets et configuration locale
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Terraform
+infra/aws/.terraform/
+infra/aws/*.tfstate
+infra/aws/*.tfstate.*
+infra/aws/terraform.tfvars
+infra/aws/.terraform.lock.hcl.bak
+infra/aws/tfplan
+
+# Sauvegardes de base de données (contiennent des données personnelles)
+backups/
+*.dump
+*.dump.sha256
+
+# Journaux
+*.log

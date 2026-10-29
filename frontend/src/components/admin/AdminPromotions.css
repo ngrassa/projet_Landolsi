@@ -1,0 +1,517 @@
+
+/* ========================================
+   PAGE
+======================================== */
+
+.admin-promotions-page {
+    min-height: 100vh;
+    padding: 30px;
+    background-color: #f5f5f5;
+}
+
+
+/* ========================================
+   HEADER
+======================================== */
+
+.admin-promotions-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.admin-promotions-header h1 {
+    margin: 0 0 7px;
+    color: #222;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.admin-promotions-header p {
+    margin: 0;
+    color: #777;
+    font-size: 14px;
+}
+
+
+/* ========================================
+   BOUTONS HEADER
+======================================== */
+
+.admin-promotions-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+
+/* ========================================
+   BOUTON DASHBOARD
+======================================== */
+
+.btn-retour-dashboard {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    border: none;
+    background-color: #333;
+    color: white;
+
+    padding: 11px 17px;
+    border-radius: 6px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-retour-dashboard:hover {
+    background-color: #222;
+}
+
+.btn-retour-dashboard svg {
+    font-size: 14px;
+}
+
+
+/* ========================================
+   BOUTON AJOUTER
+======================================== */
+
+.btn-ajouter-promotion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    border: none;
+    background-color: #e30613;
+    color: white;
+
+    padding: 11px 17px;
+    border-radius: 6px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-ajouter-promotion:hover {
+    background-color: #c40510;
+}
+
+.btn-ajouter-promotion svg {
+    font-size: 14px;
+}
+
+
+/* ========================================
+   INFORMATIONS
+======================================== */
+
+.promotions-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background-color: white;
+
+    border-left: 4px solid #e30613;
+
+    padding: 15px 18px;
+    margin-bottom: 25px;
+
+    border-radius: 7px;
+
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.promotions-info span {
+    color: #555;
+    font-size: 14px;
+}
+
+.promotions-info strong {
+    color: #e30613;
+    font-size: 20px;
+}
+
+
+/* ========================================
+   GRILLE
+======================================== */
+
+.admin-promotions-grid {
+    display: grid;
+
+    grid-template-columns: repeat(
+        auto-fill,
+        minmax(280px, 1fr)
+    );
+
+    gap: 22px;
+}
+
+
+/* ========================================
+   CARTE PROMOTION
+======================================== */
+
+.admin-promotion-card {
+    background-color: white;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+
+    transition: 0.2s;
+}
+
+.admin-promotion-card:hover {
+    transform: translateY(-3px);
+
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.12);
+}
+
+
+/* ========================================
+   IMAGE
+======================================== */
+
+.admin-promotion-image-container {
+    width: 100%;
+    height: 210px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background-color: #f8f8f8;
+
+    overflow: hidden;
+}
+
+.admin-promotion-image {
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+}
+
+.no-image {
+    color: #999;
+    font-size: 14px;
+}
+
+
+/* ========================================
+   CONTENU
+======================================== */
+
+.admin-promotion-content {
+    padding: 18px;
+}
+
+.admin-promotion-content h3 {
+    margin: 0 0 7px;
+
+    color: #222;
+
+    font-size: 18px;
+    font-weight: 700;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* ========================================
+   DIMENSION
+======================================== */
+
+.admin-promotion-dimension {
+    margin: 0 0 15px;
+
+    color: #777;
+
+    font-size: 14px;
+}
+
+
+/* ========================================
+   POURCENTAGE
+======================================== */
+
+.promotion-pourcentage {
+    display: inline-block;
+
+    padding: 7px 12px;
+
+    margin-bottom: 15px;
+
+    border-radius: 5px;
+
+    background-color: #e30613;
+    color: white;
+
+    font-size: 16px;
+    font-weight: 700;
+}
+
+
+/* ========================================
+   PRIX PROMOTION
+======================================== */
+
+.admin-promotion-prix {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    margin-bottom: 15px;
+}
+
+.prix-ancien {
+    color: #888;
+
+    font-size: 14px;
+
+    text-decoration: line-through;
+}
+
+.prix-promotion {
+    color: #e30613;
+
+    font-size: 20px;
+    font-weight: 700;
+}
+
+
+/* ========================================
+   DATES
+======================================== */
+
+.admin-promotion-dates {
+    margin-bottom: 12px;
+
+    padding: 10px;
+
+    background-color: #f7f7f7;
+
+    border-radius: 6px;
+}
+
+.admin-promotion-dates p {
+    margin: 4px 0;
+
+    color: #555;
+
+    font-size: 13px;
+}
+
+
+/* ========================================
+   STATUT
+======================================== */
+
+.admin-promotion-statut {
+    margin-bottom: 15px;
+}
+
+.promotion-active,
+.promotion-inactive {
+    display: inline-block;
+
+    padding: 5px 10px;
+
+    border-radius: 20px;
+
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.promotion-active {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.promotion-inactive {
+    background-color: #eeeeee;
+    color: #666;
+}
+
+
+/* ========================================
+   ACTIONS
+======================================== */
+
+.actions-promotion {
+    display: flex;
+    align-items: center;
+
+    justify-content: flex-end;
+
+    gap: 10px;
+}
+
+.actions-promotion button {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 6px;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+.actions-promotion .btn-modifier {
+    background-color: #eeeeee;
+    color: #333;
+}
+
+.actions-promotion .btn-modifier:hover {
+    background-color: #dddddd;
+}
+
+.actions-promotion .btn-supprimer {
+    background-color: #e30613;
+    color: white;
+}
+
+.actions-promotion .btn-supprimer:hover {
+    background-color: #c40510;
+}
+
+
+/* ========================================
+   AUCUNE PROMOTION
+======================================== */
+
+.aucune-promotion {
+    grid-column: 1 / -1;
+
+    padding: 40px;
+
+    text-align: center;
+
+    background-color: white;
+
+    border-radius: 8px;
+
+    color: #777;
+
+    font-size: 15px;
+}
+
+
+/* ========================================
+   CHARGEMENT
+======================================== */
+
+.admin-promotions-loading {
+    padding: 50px;
+
+    text-align: center;
+
+    color: #777;
+
+    font-size: 16px;
+}
+
+
+/* ========================================
+   ERREUR
+======================================== */
+
+.admin-promotions-error {
+    padding: 20px;
+
+    background-color: #fff;
+
+    border-left: 4px solid #e30613;
+
+    border-radius: 6px;
+
+    color: #e30613;
+
+    font-size: 14px;
+}
+
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+
+@media (max-width: 768px) {
+
+    .admin-promotions-page {
+        padding: 20px;
+    }
+
+    .admin-promotions-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-promotions-header-actions {
+        width: 100%;
+        gap: 10px;
+    }
+
+    .btn-retour-dashboard,
+    .btn-ajouter-promotion {
+        flex: 1;
+    }
+
+    .admin-promotions-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+
+@media (max-width: 480px) {
+
+    .admin-promotions-page {
+        padding: 15px;
+    }
+
+    .admin-promotions-header h1 {
+        font-size: 23px;
+    }
+
+    .admin-promotions-header p {
+        font-size: 13px;
+    }
+
+    .btn-retour-dashboard,
+    .btn-ajouter-promotion {
+        padding: 10px 8px;
+
+        font-size: 12px;
+    }
+
+    .admin-promotion-image-container {
+        height: 190px;
+    }
+
+}
+

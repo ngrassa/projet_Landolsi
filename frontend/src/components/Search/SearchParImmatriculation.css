@@ -1,0 +1,334 @@
+
+/* =========================
+   CONTENEUR
+========================= */
+
+.search-immat {
+    width: 100%;
+}
+
+
+/* =========================
+   HEADER
+========================= */
+
+.search-immat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-bottom: 25px;
+}
+
+
+/* Bouton retour */
+
+.search-immat-back {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    border: none;
+    background: transparent;
+
+    color: #222;
+
+    font-size: 15px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    padding: 5px;
+}
+
+.search-immat-back:hover {
+    color: #e30613;
+}
+
+
+/* =========================
+   TITRE
+========================= */
+
+.search-immat-title {
+    margin-bottom: 25px;
+}
+
+.search-immat-title h2 {
+    margin: 0 0 8px;
+
+    color: #111;
+
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.search-immat-title p {
+    margin: 0;
+
+    color: #777;
+
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+
+/* =========================
+   FORMULAIRE
+========================= */
+
+.search-immat-form {
+    display: flex;
+
+    gap: 10px;
+
+    margin-bottom: 20px;
+}
+
+
+.search-immat-form input {
+    flex: 1;
+
+    height: 46px;
+
+    padding: 0 15px;
+
+    border: 1px solid #ddd;
+    border-radius: 8px;
+
+    background: #fff;
+
+    color: #222;
+
+    font-size: 15px;
+
+    outline: none;
+
+    transition: border-color 0.2s ease;
+}
+
+
+.search-immat-form input:focus {
+    border-color: #e30613;
+}
+
+
+.search-immat-form input::placeholder {
+    color: #999;
+}
+
+
+/* Bouton rechercher */
+
+.search-immat-form button {
+    height: 46px;
+
+    padding: 0 20px;
+
+    border: none;
+    border-radius: 8px;
+
+    background: #e30613;
+    color: #fff;
+
+    font-size: 15px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: background 0.2s ease;
+}
+
+
+.search-immat-form button:hover {
+    background: #c90511;
+}
+
+
+.search-immat-form button:disabled {
+    opacity: 0.6;
+
+    cursor: not-allowed;
+}
+
+
+/* =========================
+   ERREUR
+========================= */
+
+.search-immat-error {
+    margin: 10px 0 20px;
+
+    color: #e30613;
+
+    font-size: 14px;
+}
+
+
+/* =========================
+   VEHICULE
+========================= */
+
+.search-vehicule-card {
+    display: flex;
+
+    gap: 20px;
+
+    margin-top: 20px;
+    margin-bottom: 30px;
+
+    padding: 18px;
+
+    background: #f7f7f7;
+
+    border: 1px solid #eee;
+
+    border-radius: 12px;
+}
+
+
+.search-vehicule-image {
+    width: 160px;
+    height: 120px;
+
+    flex-shrink: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.search-vehicule-image img {
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+}
+
+
+.search-vehicule-info {
+    flex: 1;
+}
+
+
+.search-vehicule-label {
+    display: block;
+
+    margin-bottom: 5px;
+
+    color: #e30613;
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+.search-vehicule-info h3 {
+    margin: 0 0 12px;
+
+    color: #111;
+
+    font-size: 21px;
+    font-weight: 700;
+}
+
+
+.search-vehicule-info p {
+    margin: 6px 0;
+
+    color: #555;
+
+    font-size: 14px;
+}
+
+
+/* =========================
+   PNEUS COMPATIBLES
+========================= */
+
+.search-pneus-result {
+    margin-top: 10px;
+}
+
+
+.search-pneus-result h2 {
+    margin: 0 0 18px;
+
+    color: #111;
+
+    font-size: 21px;
+    font-weight: 700;
+}
+
+
+/* Grille des pneus */
+
+.search-pneus-grid {
+    display: grid;
+
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    gap: 15px;
+}
+
+
+.no-pneus {
+    color: #777;
+
+    font-size: 14px;
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 768px) {
+
+    .search-vehicule-card {
+        flex-direction: column;
+    }
+
+
+    .search-vehicule-image {
+        width: 100%;
+        height: 160px;
+    }
+
+
+    .search-pneus-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+
+@media (max-width: 480px) {
+
+    .search-immat-title h2 {
+        font-size: 20px;
+    }
+
+
+    .search-immat-form {
+        flex-direction: column;
+    }
+
+
+    .search-immat-form button {
+        width: 100%;
+    }
+
+
+    .search-vehicule-card {
+        padding: 15px;
+    }
+
+
+    .search-vehicule-info h3 {
+        font-size: 19px;
+    }
+
+}
+

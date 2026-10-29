@@ -1,0 +1,681 @@
+
+/* ========================================
+   PAGE PRINCIPALE
+======================================== */
+
+.gestion-reclamations-page {
+    min-height: 100vh;
+    padding: 35px 25px 60px;
+    background: #f5f6f8;
+    color: #222;
+    box-sizing: border-box;
+}
+
+.gestion-reclamations-page *,
+.gestion-reclamations-page *::before,
+.gestion-reclamations-page *::after {
+    box-sizing: border-box;
+}
+
+/* ========================================
+   EN-TÊTE
+======================================== */
+
+.gestion-reclamations-header {
+    max-width: 1250px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.gestion-reclamations-header > div:first-child {
+    min-width: 0;
+}
+
+.gestion-reclamations-surtitle {
+    color: #d71920;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.8px;
+}
+
+.gestion-reclamations-header h1 {
+    margin: 8px 0;
+    color: #191919;
+    font-size: 30px;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.gestion-reclamations-header p {
+    margin: 0;
+    color: #737373;
+    line-height: 1.6;
+}
+
+/* ========================================
+   CONTENEUR DES BOUTONS
+======================================== */
+
+.gestion-reclamations-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 20px;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   BOUTON RETOUR AU DASHBOARD
+   Même style que la page Promotions
+======================================== */
+
+.admin-reclamation-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+    background-color: #333;
+    color: white;
+    padding: 11px 17px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.admin-reclamation-back:hover {
+    background-color: #222;
+    color: white;
+}
+
+.admin-reclamation-back svg {
+    font-size: 14px;
+}
+
+/* ========================================
+   BOUTON ACTUALISER
+======================================== */
+
+.admin-reclamation-refresh {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 11px 17px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    color: #222;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.admin-reclamation-refresh:hover:not(:disabled) {
+    border-color: #d71920;
+    color: #d71920;
+}
+
+.admin-reclamation-refresh:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.admin-reclamation-back:focus-visible,
+.admin-reclamation-refresh:focus-visible {
+    outline: 3px solid rgba(215, 25, 32, 0.25);
+    outline-offset: 3px;
+}
+
+/* ========================================
+   ALERTES
+======================================== */
+
+.admin-reclamation-alert {
+    max-width: 1250px;
+    margin: 0 auto 18px;
+    padding: 13px 16px;
+    border-radius: 7px;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.admin-reclamation-alert.error {
+    border: 1px solid #f0c2c4;
+    background: #fff0f0;
+    color: #a71920;
+}
+
+.admin-reclamation-alert.success {
+    border: 1px solid #b8e5c5;
+    background: #edf9f0;
+    color: #216b37;
+}
+
+/* ========================================
+   STATISTIQUES
+======================================== */
+
+.admin-reclamation-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    max-width: 1250px;
+    margin: 0 auto 25px;
+}
+
+.admin-reclamation-stat {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid #e9e9e9;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.025);
+}
+
+.admin-reclamation-stat span {
+    display: block;
+    color: #777;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.admin-reclamation-stat strong {
+    display: block;
+    margin-top: 12px;
+    color: #202020;
+    font-size: 29px;
+    font-weight: 800;
+}
+
+.admin-reclamation-stat.attente {
+    border-top: 3px solid #d99a19;
+}
+
+.admin-reclamation-stat.cours {
+    border-top: 3px solid #3979ce;
+}
+
+.admin-reclamation-stat.resolue {
+    border-top: 3px solid #27934b;
+}
+
+/* ========================================
+   PANNEAU PRINCIPAL
+======================================== */
+
+.admin-reclamation-panel {
+    max-width: 1250px;
+    min-width: 0;
+    margin: 0 auto;
+    padding: 22px;
+    border: 1px solid #e9e9e9;
+    border-radius: 10px;
+    background: #fff;
+}
+
+/* ========================================
+   RECHERCHE ET FILTRES
+======================================== */
+
+.admin-reclamation-filtres {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.admin-reclamation-filtres input,
+.admin-reclamation-filtres select,
+.admin-reclamation-edit select,
+.admin-reclamation-edit textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 11px 13px;
+    border: 1px solid #ddd;
+    border-radius: 7px;
+    outline: none;
+    background: #fff;
+    color: #222;
+    font: inherit;
+    font-size: 14px;
+}
+
+.admin-reclamation-filtres input:focus,
+.admin-reclamation-filtres select:focus,
+.admin-reclamation-edit select:focus,
+.admin-reclamation-edit textarea:focus {
+    border-color: #d71920;
+    box-shadow: 0 0 0 3px rgba(215, 25, 32, 0.08);
+}
+
+/* ========================================
+   LISTE DES RÉCLAMATIONS
+======================================== */
+
+.admin-reclamation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.admin-reclamation-card {
+    min-width: 0;
+    padding: 22px;
+    border: 1px solid #e7e7e7;
+    border-radius: 9px;
+    background: #fff;
+    overflow-wrap: anywhere;
+}
+
+.admin-reclamation-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.admin-reclamation-card-header > div {
+    min-width: 0;
+}
+
+.admin-reclamation-id {
+    color: #d71920;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.admin-reclamation-card-header h2 {
+    margin: 7px 0 0;
+    color: #222;
+    font-size: 19px;
+    font-weight: 750;
+    overflow-wrap: anywhere;
+}
+
+.admin-reclamation-status {
+    flex-shrink: 0;
+    padding: 7px 11px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 750;
+    text-align: center;
+}
+
+.admin-statut-attente {
+    background: #fff2d8;
+    color: #8b5b00;
+}
+
+.admin-statut-cours {
+    background: #e8f1ff;
+    color: #2058a5;
+}
+
+.admin-statut-resolue {
+    background: #e6f7eb;
+    color: #23753b;
+}
+
+/* ========================================
+   INFORMATIONS CLIENT ET DATE
+======================================== */
+
+.admin-reclamation-client {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 15px;
+    padding: 15px;
+    border-radius: 7px;
+    background: #f8f8f8;
+}
+
+.admin-reclamation-client div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.admin-reclamation-client strong,
+.admin-reclamation-description > strong,
+.admin-reclamation-response > strong {
+    color: #333;
+    font-size: 12px;
+}
+
+.admin-reclamation-client span {
+    color: #666;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+/* ========================================
+   DESCRIPTION
+======================================== */
+
+.admin-reclamation-description {
+    margin-top: 20px;
+}
+
+.admin-reclamation-description p,
+.admin-reclamation-response p {
+    margin: 8px 0 0;
+    color: #555;
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+/* ========================================
+   RÉPONSE ADMINISTRATEUR
+======================================== */
+
+.admin-reclamation-response {
+    margin-top: 18px;
+    padding: 15px;
+    border-left: 3px solid #333;
+    border-radius: 5px;
+    background: #f7f7f7;
+}
+
+/* ========================================
+   FORMULAIRE DE MODIFICATION
+======================================== */
+
+.admin-reclamation-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 22px;
+    padding: 18px;
+    border-radius: 8px;
+    background: #f8f8f8;
+}
+
+.admin-reclamation-edit label {
+    margin-top: 5px;
+    color: #333;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-reclamation-edit textarea {
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+}
+
+/* ========================================
+   BOUTONS D'ACTION
+======================================== */
+
+.admin-reclamation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.admin-reclamation-actions button {
+    min-height: 40px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-reclamation-actions button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.admin-btn-edit,
+.admin-btn-save {
+    background: #d71920;
+    color: #fff;
+}
+
+.admin-btn-edit:hover:not(:disabled),
+.admin-btn-save:hover:not(:disabled) {
+    background: #b9141a;
+}
+
+.admin-btn-delete {
+    background: #292929;
+    color: #fff;
+}
+
+.admin-btn-delete:hover:not(:disabled) {
+    background: #111;
+}
+
+.admin-btn-cancel {
+    border: 1px solid #ddd !important;
+    background: #fff;
+    color: #333;
+}
+
+.admin-btn-cancel:hover:not(:disabled) {
+    background: #eee;
+}
+
+/* ========================================
+   ÉTAT VIDE / CHARGEMENT
+======================================== */
+
+.admin-reclamation-empty {
+    padding: 35px 15px;
+    text-align: center;
+    color: #777;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* ========================================
+   TABLETTES
+======================================== */
+
+@media (max-width: 850px) {
+    .gestion-reclamations-page {
+        padding: 28px 18px 45px;
+    }
+
+    .gestion-reclamations-header {
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .gestion-reclamations-header h1 {
+        font-size: 27px;
+    }
+
+    .gestion-reclamations-header-actions {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .admin-reclamation-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .admin-reclamation-client {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-reclamation-panel {
+        padding: 18px;
+    }
+}
+
+/* ========================================
+   TÉLÉPHONES
+======================================== */
+
+@media (max-width: 550px) {
+    .gestion-reclamations-page {
+        padding: 22px 13px 35px;
+    }
+
+    .gestion-reclamations-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+
+    .gestion-reclamations-header h1 {
+        font-size: 25px;
+        line-height: 1.3;
+    }
+
+    .gestion-reclamations-header p {
+        font-size: 14px;
+    }
+
+    .gestion-reclamations-header-actions {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .gestion-reclamations-header-actions button {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .admin-reclamation-stats {
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .admin-reclamation-stat {
+        padding: 14px;
+    }
+
+    .admin-reclamation-stat span {
+        font-size: 12px;
+    }
+
+    .admin-reclamation-stat strong {
+        margin-top: 8px;
+        font-size: 25px;
+    }
+
+    .admin-reclamation-panel {
+        padding: 13px;
+        border-radius: 8px;
+    }
+
+    .admin-reclamation-filtres {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .admin-reclamation-filtres input,
+    .admin-reclamation-filtres select {
+        min-height: 44px;
+    }
+
+    .admin-reclamation-card {
+        padding: 15px;
+    }
+
+    .admin-reclamation-card-header {
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .admin-reclamation-card-header h2 {
+        font-size: 17px;
+    }
+
+    .admin-reclamation-status {
+        align-self: flex-start;
+    }
+
+    .admin-reclamation-client {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 13px;
+        padding: 13px;
+    }
+
+    .admin-reclamation-description {
+        margin-top: 16px;
+    }
+
+    .admin-reclamation-edit {
+        padding: 13px;
+    }
+
+    .admin-reclamation-actions {
+        flex-direction: column;
+        gap: 9px;
+    }
+
+    .admin-reclamation-actions button {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .admin-reclamation-empty {
+        padding: 25px 10px;
+    }
+}
+
+/* ========================================
+   TRÈS PETITS TÉLÉPHONES
+======================================== */
+
+@media (max-width: 360px) {
+    .gestion-reclamations-page {
+        padding-right: 9px;
+        padding-left: 9px;
+    }
+
+    .gestion-reclamations-header h1 {
+        font-size: 22px;
+    }
+
+    .admin-reclamation-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-reclamation-stat {
+        padding: 13px;
+    }
+
+    .admin-reclamation-panel {
+        padding: 10px;
+    }
+
+    .admin-reclamation-card {
+        padding: 12px;
+    }
+
+    .admin-reclamation-back,
+    .admin-reclamation-refresh {
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+}

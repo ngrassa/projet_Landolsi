@@ -1,0 +1,62 @@
+.search-results-marque-page {
+    min-height: 100vh;
+    background: #f5f5f5;
+    padding: 50px 0;
+}
+
+.search-results-marque-page h1 {
+    color: #222;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.search-results-marque-page h2 {
+    color: #C8102E;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+
+.search-results-marque-page p {
+    color: #666;
+}
+
+.search-results-marque-count {
+    margin-top: 25px;
+    margin-bottom: 25px;
+}
+
+.search-results-marque-count p {
+    color: #222;
+    font-weight: 600;
+}
+
+.search-results-marque-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+    margin-top: 30px;
+}
+
+.search-results-marque-no-results,
+.search-results-marque-message {
+    background: #fff;
+    padding: 30px;
+    text-align: center;
+    border-radius: 10px;
+}
+
+@media (max-width: 992px) {
+    .search-results-marque-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .search-results-marque-page {
+        padding: 30px 15px;
+    }
+
+    .search-results-marque-grid {
+        grid-template-columns: 1fr;
+    }
+}

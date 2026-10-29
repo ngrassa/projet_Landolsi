@@ -1,0 +1,1057 @@
+/* ========================================
+   PAGE MES COMMANDES
+======================================== */
+
+.commandes-page {
+    min-height: 100vh;
+
+    background: #f5f5f5;
+
+    padding: 40px 20px 70px;
+}
+
+
+/* ========================================
+   CONTAINER
+======================================== */
+
+.commandes-container {
+    width: 100%;
+
+    max-width: 1050px;
+
+    margin: 0 auto;
+}
+
+
+/* ========================================
+   TITRE
+======================================== */
+
+.commandes-title {
+    display: flex;
+
+    align-items: center;
+
+    gap: 16px;
+
+    margin-bottom: 22px;
+}
+
+
+/* ICON */
+
+.commandes-title-icon {
+    width: 55px;
+
+    height: 55px;
+
+    flex-shrink: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background: #c8102e;
+
+    color: #ffffff;
+
+    border-radius: 11px;
+
+    font-size: 23px;
+
+    box-shadow:
+        0 5px 15px rgba(200, 16, 46, 0.18);
+}
+
+
+/* TITRE */
+
+.commandes-title h1 {
+    margin: 0;
+
+    color: #222222;
+
+    font-size: 28px;
+
+    line-height: 1.2;
+
+    font-weight: 700;
+}
+
+
+/* DESCRIPTION */
+
+.commandes-title p {
+    margin: 5px 0 0;
+
+    color: #777777;
+
+    font-size: 13px;
+}
+
+
+/* ========================================
+   NOMBRE COMMANDES
+======================================== */
+
+.commandes-count {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 7px;
+
+    padding: 8px 13px;
+
+    margin-bottom: 18px;
+
+    color: #666666;
+
+    font-size: 13px;
+}
+
+
+.commandes-count strong {
+    color: #c8102e;
+
+    font-size: 16px;
+
+    font-weight: 700;
+}
+
+
+/* ========================================
+   LISTE
+======================================== */
+
+.commandes-list {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 18px;
+}
+
+
+/* ========================================
+   CARTE COMMANDE
+======================================== */
+
+.commande-card {
+    background: #ffffff;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 11px;
+
+    overflow: hidden;
+
+    box-shadow:
+        0 3px 12px rgba(0, 0, 0, 0.05);
+
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+.commande-card:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+
+/* ========================================
+   HEADER COMMANDE
+======================================== */
+
+.commande-header {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 15px;
+
+    padding: 17px 21px;
+
+    border-bottom: 1px solid #eeeeee;
+
+    background: #fafafa;
+}
+
+
+/* LABEL */
+
+.commande-label {
+    display: block;
+
+    color: #888888;
+
+    font-size: 11px;
+
+    margin-bottom: 3px;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.5px;
+}
+
+
+/* NUMERO COMMANDE */
+
+.commande-header h2 {
+    margin: 0;
+
+    color: #222222;
+
+    font-size: 19px;
+
+    font-weight: 700;
+}
+
+
+/* ========================================
+   STATUT
+======================================== */
+
+.commande-status {
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 6px 12px;
+
+    border-radius: 20px;
+
+    font-size: 11px;
+
+    font-weight: 600;
+
+    text-transform: capitalize;
+
+    white-space: nowrap;
+}
+
+
+/* EN ATTENTE */
+
+.status-en-attente {
+    background: #fff4df;
+
+    color: #a56600;
+}
+
+
+/* CONFIRMEE */
+
+.status-confirmee {
+    background: #eaf7ee;
+
+    color: #24783d;
+}
+
+
+/* EXPEDIEE */
+
+.status-expediee {
+    background: #eaf2ff;
+
+    color: #245ca8;
+}
+
+
+/* LIVREE */
+
+.status-livree {
+    background: #eaf7ee;
+
+    color: #24783d;
+}
+
+
+/* ANNULEE */
+
+.status-annulee {
+    background: #fdecec;
+
+    color: #b42332;
+}
+
+
+/* ========================================
+   DATE
+======================================== */
+
+.commande-date {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    padding: 12px 21px 7px;
+
+    color: #777777;
+
+    font-size: 12px;
+}
+
+
+.commande-date svg {
+    color: #c8102e;
+
+    font-size: 13px;
+}
+
+
+/* ========================================
+   PRODUITS
+======================================== */
+
+.commande-products {
+    padding: 2px 21px 15px;
+}
+
+
+/* PRODUIT */
+
+.commande-product {
+    display: flex;
+
+    align-items: center;
+
+    gap: 15px;
+
+    padding: 15px 0;
+
+    border-bottom: 1px solid #eeeeee;
+}
+
+
+.commande-product:last-child {
+    border-bottom: none;
+}
+
+
+/* ========================================
+   IMAGE PRODUIT
+======================================== */
+
+.commande-product-image {
+    width: 78px;
+
+    height: 78px;
+
+    flex-shrink: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background: #f7f7f7;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 8px;
+
+    overflow: hidden;
+
+    color: #aaaaaa;
+
+    font-size: 22px;
+}
+
+
+.commande-product-image img {
+    width: 100%;
+
+    height: 100%;
+
+    object-fit: contain;
+
+    display: block;
+}
+
+
+/* ========================================
+   INFORMATIONS PRODUIT
+======================================== */
+
+.commande-product-info {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 3px;
+
+    flex: 1;
+
+    min-width: 0;
+}
+
+
+/* MODELE */
+
+.commande-product-info h3 {
+    margin: 0;
+
+    color: #222222;
+
+    font-size: 15px;
+
+    line-height: 1.3;
+
+    font-weight: 700;
+}
+
+
+/* INFORMATIONS */
+
+.commande-product-info span {
+    color: #777777;
+
+    font-size: 12px;
+
+    line-height: 1.3;
+}
+
+
+/* MARQUE */
+
+.commande-product-info .commande-marque {
+    color: #c8102e;
+
+    font-size: 13px;
+
+    font-weight: 600;
+}
+
+
+/* ========================================
+   PRIX PRODUIT
+======================================== */
+
+.commande-product-price {
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: flex-end;
+
+    justify-content: center;
+
+    gap: 3px;
+
+    min-width: 125px;
+}
+
+
+/* QUANTITE */
+
+.commande-product-price span {
+    color: #777777;
+
+    font-size: 12px;
+}
+
+
+/* PRIX TOTAL */
+
+.commande-product-price strong {
+    color: #222222;
+
+    font-size: 15px;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+
+/* PRIX UNITAIRE */
+
+.commande-product-price small {
+    color: #999999;
+
+    font-size: 10px;
+
+    white-space: nowrap;
+}
+
+
+/* ========================================
+   FOOTER
+======================================== */
+
+.commande-footer {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 15px;
+
+    padding: 15px 21px;
+
+    background: #fafafa;
+
+    border-top: 1px solid #eeeeee;
+}
+
+
+/* ========================================
+   TOTAL
+======================================== */
+
+.commande-footer-total {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 2px;
+}
+
+
+/* TEXTE TOTAL */
+
+.commande-footer-total span {
+    color: #777777;
+
+    font-size: 11px;
+
+    font-weight: 500;
+}
+
+
+/* MONTANT TOTAL */
+
+.commande-footer-total strong {
+    color: #c8102e;
+
+    font-size: 18px;
+
+    line-height: 1.2;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+
+/* ========================================
+   BOUTON DETAILS
+======================================== */
+
+.commande-details-btn {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 7px;
+
+    border: none;
+
+    background: #222222;
+
+    color: #ffffff;
+
+    padding: 10px 16px;
+
+    border-radius: 6px;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+.commande-details-btn:hover {
+    background: #000000;
+
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 5px 12px rgba(0, 0, 0, 0.15);
+}
+
+
+/* ========================================
+   CHARGEMENT
+======================================== */
+
+.commandes-loading {
+    min-height: 400px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    color: #777777;
+}
+
+
+.commandes-loading svg {
+    color: #c8102e;
+
+    font-size: 34px;
+
+    margin-bottom: 13px;
+}
+
+
+.commandes-loading p {
+    margin: 0;
+
+    font-size: 14px;
+}
+
+
+/* ========================================
+   ERREUR
+======================================== */
+
+.commandes-error {
+    background: #fdecec;
+
+    border: 1px solid #f0b7bd;
+
+    color: #a52232;
+
+    padding: 15px 18px;
+
+    border-radius: 8px;
+
+    text-align: center;
+
+    font-size: 13px;
+}
+
+
+/* ========================================
+   AUCUNE COMMANDE
+======================================== */
+
+.commandes-empty {
+    background: #ffffff;
+
+    border: 1px solid #e5e5e5;
+
+    border-radius: 11px;
+
+    padding: 60px 25px;
+
+    text-align: center;
+
+    box-shadow:
+        0 3px 12px rgba(0, 0, 0, 0.04);
+}
+
+
+.commandes-empty svg {
+    color: #c8102e;
+
+    font-size: 45px;
+
+    margin-bottom: 14px;
+}
+
+
+.commandes-empty h2 {
+    margin: 0 0 7px;
+
+    color: #222222;
+
+    font-size: 21px;
+}
+
+
+.commandes-empty p {
+    margin: 0 0 22px;
+
+    color: #777777;
+
+    font-size: 13px;
+}
+
+
+.commandes-empty button {
+    border: none;
+
+    background: #c8102e;
+
+    color: #ffffff;
+
+    padding: 11px 18px;
+
+    border-radius: 6px;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        transform 0.2s ease;
+}
+
+
+.commandes-empty button:hover {
+    background: #a80d26;
+
+    transform: translateY(-1px);
+}
+
+
+/* ========================================
+   TABLETTE
+======================================== */
+
+@media (max-width: 768px) {
+
+    .commandes-page {
+        padding: 30px 15px 50px;
+    }
+
+
+    .commandes-container {
+        max-width: 100%;
+    }
+
+
+    .commandes-title h1 {
+        font-size: 25px;
+    }
+
+
+    .commande-header {
+        padding: 16px 18px;
+    }
+
+
+    .commande-date {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+
+    .commande-products {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+
+    .commande-footer {
+        padding: 14px 18px;
+    }
+
+
+    .commande-product {
+        gap: 12px;
+    }
+
+
+    .commande-product-image {
+        width: 72px;
+
+        height: 72px;
+    }
+
+
+    .commande-product-info h3 {
+        font-size: 14px;
+    }
+
+
+    .commande-product-price {
+        min-width: 110px;
+    }
+}
+
+
+/* ========================================
+   MOBILE
+======================================== */
+
+@media (max-width: 600px) {
+
+    .commandes-page {
+        padding: 25px 12px 40px;
+    }
+
+
+    /* TITRE */
+
+    .commandes-title {
+        gap: 11px;
+
+        margin-bottom: 18px;
+    }
+
+
+    .commandes-title-icon {
+        width: 45px;
+
+        height: 45px;
+
+        font-size: 19px;
+
+        border-radius: 9px;
+    }
+
+
+    .commandes-title h1 {
+        font-size: 21px;
+    }
+
+
+    .commandes-title p {
+        font-size: 11px;
+    }
+
+
+    /* COUNT */
+
+    .commandes-count {
+        padding: 7px 11px;
+
+        margin-bottom: 15px;
+    }
+
+
+    /* HEADER */
+
+    .commande-header {
+        padding: 14px;
+
+        align-items: flex-start;
+    }
+
+
+    .commande-header h2 {
+        font-size: 17px;
+    }
+
+
+    .commande-status {
+        font-size: 10px;
+
+        padding: 5px 9px;
+    }
+
+
+    /* DATE */
+
+    .commande-date {
+        padding: 11px 14px 6px;
+
+        font-size: 11px;
+    }
+
+
+    /* PRODUITS */
+
+    .commande-products {
+        padding: 3px 14px 12px;
+    }
+
+
+    .commande-product {
+        display: grid;
+
+        grid-template-columns: 65px 1fr;
+
+        gap: 10px;
+
+        padding: 13px 0;
+    }
+
+
+    .commande-product-image {
+        width: 65px;
+
+        height: 65px;
+
+        grid-row: span 2;
+    }
+
+
+    .commande-product-info h3 {
+        font-size: 14px;
+    }
+
+
+    .commande-product-info span {
+        font-size: 11px;
+    }
+
+
+    .commande-product-info .commande-marque {
+        font-size: 12px;
+    }
+
+
+    /* PRIX */
+
+    .commande-product-price {
+        grid-column: 2;
+
+        flex-direction: row;
+
+        align-items: center;
+
+        justify-content: space-between;
+
+        width: 100%;
+
+        min-width: 0;
+
+        gap: 6px;
+    }
+
+
+    .commande-product-price span {
+        font-size: 11px;
+    }
+
+
+    .commande-product-price strong {
+        font-size: 14px;
+    }
+
+
+    .commande-product-price small {
+        font-size: 9px;
+    }
+
+
+    /* FOOTER */
+
+    .commande-footer {
+        flex-direction: column;
+
+        align-items: stretch;
+
+        padding: 14px;
+    }
+
+
+    /* TOTAL */
+
+    .commande-footer-total {
+        flex-direction: row;
+
+        align-items: center;
+
+        justify-content: space-between;
+    }
+
+
+    .commande-footer-total span {
+        font-size: 11px;
+    }
+
+
+    .commande-footer-total strong {
+        font-size: 17px;
+    }
+
+
+    /* BOUTON */
+
+    .commande-details-btn {
+        width: 100%;
+
+        padding: 10px;
+
+        font-size: 12px;
+    }
+}
+
+
+/* ========================================
+   PETIT MOBILE
+======================================== */
+
+@media (max-width: 400px) {
+
+    .commandes-title h1 {
+        font-size: 19px;
+    }
+
+
+    .commandes-title p {
+        font-size: 10px;
+    }
+
+
+    .commande-header h2 {
+        font-size: 16px;
+    }
+
+
+    .commande-product {
+        grid-template-columns: 58px 1fr;
+
+        gap: 9px;
+    }
+
+
+    .commande-product-image {
+        width: 58px;
+
+        height: 58px;
+    }
+
+
+    .commande-product-info h3 {
+        font-size: 13px;
+    }
+
+
+    .commande-product-info span {
+        font-size: 10px;
+    }
+
+
+    .commande-product-price strong {
+        font-size: 13px;
+    }
+
+
+    .commande-footer-total strong {
+        font-size: 16px;
+    }
+}

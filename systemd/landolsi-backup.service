@@ -1,0 +1,17 @@
+# Sauvegarde quotidienne PostgreSQL (déclenchée par landolsi-backup.timer)
+[Unit]
+Description=LANDOLSI TIRES - sauvegarde PostgreSQL
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=landolsi
+Group=landolsi
+ExecStart=/opt/landolsi/current/scripts/backup-db.sh --env-file /etc/landolsi/backend.env --output-dir /var/backups/landolsi --keep 14
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/backups/landolsi
+SyslogIdentifier=landolsi-backup

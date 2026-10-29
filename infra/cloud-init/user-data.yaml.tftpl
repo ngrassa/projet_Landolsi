@@ -1,0 +1,20 @@
+#cloud-config
+# Amorçage EC2 : mises à jour, puis (si git_repo_url est défini) clonage du
+# dépôt, installation et premier déploiement. Journal : /var/log/cloud-init-output.log
+%{ if ssh_public_key != "" ~}
+ssh_authorized_keys:
+  - ${ssh_public_key}
+%{ endif ~}
+package_update: true
+package_upgrade: true
+packages:
+  - git
+  - curl
+
+runcmd:
+%{ if git_repo_url != "" ~}
+  - [ bash, -c, "set -euo pipefail; git clone --branch '${git_ref}' --depth 1 '${git_repo_url}' /opt/landolsi-src" ]
+  - [ bash, -c, "set -euo pipefail; /opt/landolsi-src/scripts/install.sh && /opt/landolsi-src/scripts/deploy.sh --source /opt/landolsi-src" ]
+%{ else ~}
+  - [ bash, -c, "echo 'git_repo_url vide : installation manuelle (docs/deployment/aws-academy-deployment.md)' > /etc/motd.d/landolsi 2>/dev/null || true" ]
+%{ endif ~}

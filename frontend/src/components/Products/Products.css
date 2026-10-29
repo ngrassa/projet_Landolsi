@@ -1,0 +1,374 @@
+
+/* ==============================
+   SECTION PRODUITS
+============================== */
+
+.products {
+  padding: 70px 5%;
+  background: #f5f5f5;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.products h2 {
+  font-size: 32px;
+  color: #111;
+  margin: 0 0 40px;
+}
+
+/* ==============================
+   GRILLE : 4 PNEUS ALIGNÉS
+============================== */
+
+.products-container {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+  width: 100%;
+}
+
+/* ==============================
+   CARTE DU PNEU
+============================== */
+
+.product-card {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 18px;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* ==============================
+   IMAGE DU PNEU
+============================== */
+
+.product-image-container {
+  position: relative;
+  width: 100%;
+  height: 210px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  overflow: hidden;
+}
+
+
+.product-card .product-image {
+  display: block;
+  width: 150%;
+  height: 100%;
+  max-width: none;
+  object-fit: contain;
+  object-position: center;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.product-card:hover .product-image {
+  transform: scale(1.08);
+}
+
+
+.product-card:hover .product-image {
+  transform: scale(1.08);
+}
+
+/* Image indisponible */
+
+.product-no-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #777;
+  font-size: 13px;
+}
+
+/* ==============================
+   BADGE SAISON
+============================== */
+
+.product-season {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  background: #f5f5f5;
+  color: #333;
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ==============================
+   INFORMATIONS
+============================== */
+
+.product-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  text-align: left;
+  padding-top: 12px;
+}
+
+.product-brand {
+  margin: 0 0 6px;
+  color: #d71920;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.product-info h3 {
+  color: #111;
+  font-size: 17px;
+  line-height: 1.4;
+  min-height: 48px;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Dimension */
+
+.product-dimension {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 10px 0;
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+}
+
+.product-dimension span {
+  color: #777;
+  font-size: 12px;
+}
+
+.product-dimension strong {
+  color: #333;
+  font-size: 13px;
+}
+
+/* ==============================
+   PRIX ET FLÈCHE
+============================== */
+
+.product-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 15px;
+}
+
+.product-price-label {
+  color: #777;
+  font-size: 12px;
+}
+
+.product-card-footer h4 {
+  color: #d71920;
+  font-size: 20px;
+  font-weight: 800;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.product-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #d71920;
+  color: white;
+  transition: background 0.3s ease;
+}
+
+.product-card:hover .product-arrow {
+  background: #b31318;
+}
+
+/* ==============================
+   DISPONIBILITÉ
+============================== */
+
+.product-stock {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stock-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #198754;
+}
+
+.product-stock.in-stock {
+  color: #198754;
+}
+
+.product-stock.out-stock {
+  color: #d71920;
+}
+
+.product-stock.out-stock .stock-dot {
+  background: #d71920;
+}
+
+/* ==============================
+   BOUTON TOUS LES PNEUS
+============================== */
+
+.products-all-button {
+  display: block;
+  margin: 35px auto 0;
+  padding: 12px 25px;
+  background: #d71920;
+  color: #fff;
+  border: 2px solid #d71920;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.products-all-button:hover {
+  background: #fff;
+  color: #d71920;
+}
+
+/* ==============================
+   PETITS ÉCRANS / TABLETTE
+============================== */
+
+@media (max-width: 1000px) {
+  .products {
+    padding: 50px 4%;
+  }
+
+  .products-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .product-image-container {
+    height: 230px;
+  }
+}
+
+/* ==============================
+   TÉLÉPHONE
+============================== */
+
+@media (max-width: 500px) {
+  .products {
+    padding: 40px 5%;
+  }
+
+  .products h2 {
+    font-size: 26px;
+    margin-bottom: 25px;
+  }
+
+  .products-container {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .product-image-container {
+    height: 260px;
+  }
+
+  .product-info h3 {
+    min-height: auto;
+  }
+}
+
+/* ==============================
+   ACCESSIBILITÉ
+============================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card,
+  .product-image,
+  .product-arrow,
+  .products-all-button {
+    transition: none;
+  }
+}
+
+/* Animation décorative sous les pneus */
+
+.products-animation {
+  width: 180px;
+  height: 4px;
+  margin: 40px auto 0;
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #eeeeee;
+}
+
+.products-animation span {
+  position: absolute;
+  top: 0;
+  left: -45%;
+  width: 45%;
+  height: 100%;
+  border-radius: 10px;
+  background: #d71920;
+  animation: tireLineMove 2s ease-in-out infinite;
+}
+
+@keyframes tireLineMove {
+  0% {
+    left: -45%;
+  }
+
+  100% {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .products-animation span {
+    animation: none;
+    left: 27.5%;
+    width: 45%;
+  }
+}

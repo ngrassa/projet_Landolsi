@@ -1,0 +1,160 @@
+/* ==============================
+   NOTIFICATION
+============================== */
+
+.notification-toast {
+
+    position: fixed;
+
+    right: 25px;
+    bottom: 25px;
+
+    z-index: 9999;
+
+    width: 350px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 14px;
+
+    padding: 16px 18px;
+
+    background: #ffffff;
+
+    border-left: 4px solid #C8102E;
+
+    border-radius: 8px;
+
+    box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.15);
+
+    animation: notification-slide 0.3s ease;
+}
+
+
+/* ==============================
+   ICONE
+============================== */
+
+.notification-icon {
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #C8102E;
+
+    font-size: 22px;
+
+}
+
+
+/* ==============================
+   CONTENU
+============================== */
+
+.notification-content {
+
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 4px;
+
+}
+
+
+.notification-content strong {
+
+    color: #222;
+
+    font-size: 14px;
+
+}
+
+
+.notification-content span {
+
+    color: #666;
+
+    font-size: 13px;
+
+}
+
+
+/* ==============================
+   BOUTON FERMER
+============================== */
+
+.notification-close {
+
+    width: 25px;
+    height: 25px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+
+    background: transparent;
+
+    color: #999;
+
+    cursor: pointer;
+
+}
+
+
+.notification-close:hover {
+
+    color: #C8102E;
+
+}
+
+
+/* ==============================
+   ANIMATION
+============================== */
+
+@keyframes notification-slide {
+
+    from {
+
+        opacity: 0;
+
+        transform: translateX(40px);
+
+    }
+
+    to {
+
+        opacity: 1;
+
+        transform: translateX(0);
+
+    }
+
+}
+
+
+/* ==============================
+   MOBILE
+============================== */
+
+@media (max-width: 480px) {
+
+    .notification-toast {
+
+        left: 15px;
+        right: 15px;
+
+        bottom: 15px;
+
+        width: auto;
+
+    }
+
+}

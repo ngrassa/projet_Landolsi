@@ -1,0 +1,45 @@
+# API LANDOLSI TIRES (Node.js / Express)
+# Installé par scripts/install.sh dans /etc/systemd/system/
+[Unit]
+Description=LANDOLSI TIRES - API backend (Node.js/Express)
+Documentation=file:///opt/landolsi/current/docs/deployment/aws-academy-deployment.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=landolsi
+Group=landolsi
+WorkingDirectory=/opt/landolsi/current/backend
+Environment=NODE_ENV=production
+Environment=ENV_FILE=/etc/landolsi/backend.env
+# Secrets : fichier root:landolsi 0640, jamais dans ce fichier unité
+EnvironmentFile=/etc/landolsi/backend.env
+ExecStart=/usr/bin/node app.js
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Journaux : journalctl -u landolsi-backend
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=landolsi-backend
+
+# Durcissement
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/landolsi/uploads
+
+[Install]
+WantedBy=multi-user.target

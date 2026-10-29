@@ -1,0 +1,274 @@
+
+/* =========================
+   HEADER
+========================= */
+
+.dimension-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 18px;
+}
+
+.dimension-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dimension-header h2 {
+  margin: 0;
+
+  color: #111;
+
+  font-size: 24px;
+  font-weight: 700;
+}
+
+
+/* =========================
+   BOUTON RETOUR
+========================= */
+
+.dimension-back,
+.dimension-close {
+  border: none;
+
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition: all 0.2s ease;
+}
+
+
+/* Retour */
+
+.dimension-back {
+  width: 38px;
+  height: 38px;
+
+  border-radius: 50%;
+
+  background: #f3f3f3;
+
+  color: #222;
+}
+
+.dimension-back:hover {
+  background: #C8102E;
+  color: white;
+}
+
+
+/* Fermer */
+
+.dimension-close {
+  width: 40px;
+  height: 40px;
+
+  border-radius: 50%;
+
+  background: #f1f1f1;
+
+  color: #222;
+}
+
+.dimension-close:hover {
+  background: #C8102E;
+  color: white;
+}
+
+
+/* =========================
+   DESCRIPTION
+========================= */
+
+.dimension-description {
+  margin: 0 0 25px;
+
+  color: #777;
+
+  font-size: 14px;
+
+  line-height: 1.5;
+}
+
+
+/* =========================
+   FORMULAIRE
+========================= */
+
+.dimension-form {
+  display: grid;
+
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 15px;
+}
+
+
+/* Champ */
+
+.dimension-field {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+
+/* Label */
+
+.dimension-field label {
+  color: #222;
+
+  font-size: 14px;
+
+  font-weight: 600;
+}
+
+
+/* Select */
+
+.dimension-field select {
+  width: 100%;
+
+  height: 48px;
+
+  padding: 0 12px;
+
+  border: 1px solid #ddd;
+
+  border-radius: 8px;
+
+  background: #fff;
+
+  color: #222;
+
+  font-size: 15px;
+
+  cursor: pointer;
+
+  outline: none;
+
+  transition: 0.2s;
+}
+
+.dimension-field select:hover {
+  border-color: #C8102E;
+}
+
+.dimension-field select:focus {
+  border-color: #C8102E;
+
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.1);
+}
+
+
+/* =========================
+   APERÇU
+========================= */
+
+.dimension-preview {
+  margin-top: 22px;
+
+  padding: 15px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  background: #f7f7f7;
+
+  border-radius: 8px;
+
+  font-size: 14px;
+}
+
+.dimension-preview span {
+  color: #777;
+}
+
+.dimension-preview strong {
+  color: #C8102E;
+
+  font-size: 16px;
+}
+
+
+/* =========================
+   BOUTON RECHERCHE
+========================= */
+
+.dimension-search-button {
+  width: 100%;
+
+  height: 50px;
+
+  margin-top: 22px;
+
+  border: none;
+
+  border-radius: 8px;
+
+  background: #C8102E;
+
+  color: white;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 10px;
+
+  font-size: 15px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.dimension-search-button:hover {
+  background: #a90d27;
+
+  transform: translateY(-1px);
+
+  box-shadow: 0 5px 15px rgba(200, 16, 46, 0.2);
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 600px) {
+
+  .dimension-form {
+    grid-template-columns: 1fr;
+  }
+
+  .dimension-header h2 {
+    font-size: 20px;
+  }
+
+  .dimension-preview {
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    gap: 5px;
+  }
+
+}
+

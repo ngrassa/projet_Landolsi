@@ -1,0 +1,89 @@
+
+.avis-form {
+    margin-top: 18px;
+    padding: 20px;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.avis-form h3 {
+    margin: 0 0 10px;
+    color: #222;
+    font-size: 19px;
+}
+
+.avis-description {
+    margin-bottom: 15px;
+    color: #777;
+}
+
+.avis-form label {
+    display: block;
+    margin: 12px 0 8px;
+    font-weight: 600;
+}
+
+.avis-stars {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.avis-star-button {
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.avis-star-button .star {
+    font-size: 28px;
+    transition: transform 0.2s;
+}
+
+.avis-star-button:hover .star {
+    transform: scale(1.15);
+}
+
+.avis-form textarea {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    resize: vertical;
+    margin-bottom: 15px;
+    font: inherit;
+}
+
+.avis-form button[type="submit"] {
+    margin-top: 10px;
+    padding: 11px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #d71920;
+    color: white;
+    cursor: pointer;
+}
+
+.avis-form button[type="submit"]:hover {
+    background: #b9151b;
+}
+
+.avis-form button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.avis-error {
+    color: #d71920;
+    margin-bottom: 12px;
+}
+
+.avis-success {
+    color: green;
+    margin-bottom: 12px;
+}

@@ -1,0 +1,548 @@
+
+/* ========================================
+   PAGE
+======================================== */
+
+.admin-pneus-page {
+    min-height: 100vh;
+    padding: 30px;
+    background-color: #f5f5f5;
+}
+
+
+/* ========================================
+   HEADER
+======================================== */
+
+.admin-pneus-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.admin-pneus-header h1 {
+    margin: 0 0 7px;
+    color: #222;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.admin-pneus-header p {
+    margin: 0;
+    color: #777;
+    font-size: 14px;
+}
+/* ========================================
+   BOUTONS DU HEADER
+======================================== */
+
+.admin-pneus-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+
+/* ========================================
+   BOUTON DASHBOARD
+======================================== */
+
+.btn-retour-dashboard {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    border: none;
+    background-color: #333;
+    color: white;
+
+    padding: 11px 17px;
+    border-radius: 6px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-retour-dashboard:hover {
+    background-color: #222;
+}
+
+.btn-retour-dashboard svg {
+    font-size: 14px;
+}
+
+
+/* ========================================
+   BOUTON AJOUTER
+======================================== */
+
+.btn-ajouter-pneu {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    border: none;
+    background-color: #e30613;
+    color: white;
+
+    padding: 11px 17px;
+    border-radius: 6px;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-ajouter-pneu:hover {
+    background-color: #c40510;
+}
+
+.btn-ajouter-pneu svg {
+    font-size: 14px;
+}
+
+
+/* ========================================
+   NOMBRE DE PNEUS
+======================================== */
+
+.pneus-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background-color: white;
+
+    border-left: 4px solid #e30613;
+
+    padding: 15px 18px;
+    margin-bottom: 25px;
+
+    border-radius: 7px;
+
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.pneus-info span {
+    color: #555;
+    font-size: 14px;
+}
+
+.pneus-info strong {
+    color: #e30613;
+    font-size: 22px;
+}
+
+
+/* ========================================
+   GRILLE
+======================================== */
+
+.admin-pneus-grid {
+    display: grid;
+
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+
+    gap: 20px;
+
+    width: 100%;
+}
+
+
+/* ========================================
+   CARTE PNEU
+======================================== */
+
+.admin-pneu-card {
+    background-color: white;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+    transition: 0.2s;
+}
+
+.admin-pneu-card:hover {
+    transform: translateY(-3px);
+
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.12);
+}
+
+
+/* ========================================
+   IMAGE
+======================================== */
+
+.admin-pneu-image-container {
+    width: 100%;
+
+    height: 125px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background-color: white;
+
+    padding: 8px;
+}
+
+.admin-pneu-image {
+    width: 110px;
+
+    height: 95px;
+
+    object-fit: contain;
+
+    display: block;
+}
+
+.no-image {
+    color: #999;
+    font-size: 12px;
+}
+
+
+/* ========================================
+   CONTENU
+======================================== */
+
+.admin-pneu-content {
+    padding: 14px;
+}
+
+.admin-pneu-content h3 {
+    margin: 0 0 4px;
+
+    color: #222;
+
+    font-size: 16px;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.admin-pneu-marque {
+    margin: 0 0 10px;
+
+    color: #777;
+
+    font-size: 13px;
+}
+
+
+/* ========================================
+   DIMENSION + SAISON
+======================================== */
+
+.admin-pneu-details {
+    display: flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    margin-bottom: 12px;
+}
+
+.admin-pneu-details span {
+    background-color: #f3f3f3;
+
+    color: #555;
+
+    padding: 5px 7px;
+
+    border-radius: 4px;
+
+    font-size: 11px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+
+/* ========================================
+   PRIX + STOCK
+======================================== */
+
+.admin-pneu-bottom {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 8px;
+
+    margin-bottom: 12px;
+}
+
+.admin-pneu-bottom strong {
+    color: #e30613;
+
+    font-size: 17px;
+
+    font-weight: 700;
+}
+
+
+/* ========================================
+   STOCK
+======================================== */
+
+.stock-disponible,
+.stock-rupture {
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 5px 7px;
+
+    border-radius: 20px;
+
+    font-size: 10px;
+
+    font-weight: 600;
+
+    white-space: nowrap;
+}
+
+.stock-disponible {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.stock-rupture {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+
+/* ========================================
+   ACTIONS
+======================================== */
+
+.actions-pneu {
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 8px;
+
+    padding-top: 10px;
+
+    border-top: 1px solid #eeeeee;
+}
+
+
+/* ========================================
+   BOUTONS ICONES
+======================================== */
+
+.btn-modifier,
+.btn-supprimer {
+    width: 34px;
+    height: 34px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 5px;
+
+    cursor: pointer;
+
+    font-size: 13px;
+
+    transition: 0.2s;
+}
+
+
+/* MODIFIER */
+
+.btn-modifier {
+    background-color: #eeeeee;
+    color: #333;
+}
+
+.btn-modifier:hover {
+    background-color: #dddddd;
+}
+
+
+/* SUPPRIMER */
+
+.btn-supprimer {
+    background-color: #e30613;
+    color: white;
+}
+
+.btn-supprimer:hover {
+    background-color: #c40510;
+}
+
+
+/* ========================================
+   AUCUN PNEU
+======================================== */
+
+.aucun-pneu {
+    grid-column: 1 / -1;
+
+    text-align: center;
+
+    padding: 50px 20px;
+
+    background-color: white;
+
+    border-radius: 8px;
+
+    color: #888;
+}
+
+
+/* ========================================
+   CHARGEMENT
+======================================== */
+
+.admin-pneus-loading {
+    text-align: center;
+
+    padding: 80px 20px;
+
+    color: #666;
+
+    font-size: 16px;
+}
+
+
+/* ========================================
+   ERREUR
+======================================== */
+
+.admin-pneus-error {
+    padding: 20px;
+
+    background-color: #ffebee;
+
+    color: #c62828;
+
+    border-radius: 6px;
+
+    font-size: 14px;
+}
+
+
+/* ========================================
+   4 → 3 PNEUS
+======================================== */
+
+@media (max-width: 1100px) {
+
+    .admin-pneus-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+}
+
+
+/* ========================================
+   3 → 2 PNEUS
+======================================== */
+
+@media (max-width: 850px) {
+
+    .admin-pneus-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px;
+    }
+
+}
+
+
+/* ========================================
+   MOBILE : 1 PNEU
+======================================== */
+
+@media (max-width: 600px) {
+
+    .admin-pneus-page {
+        padding: 20px 15px;
+    }
+
+    .admin-pneus-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-pneus-header h1 {
+        font-size: 24px;
+    }
+
+    .admin-pneus-header p {
+        font-size: 13px;
+    }
+
+    .btn-ajouter-pneu {
+        width: 100%;
+    }
+
+    .admin-pneus-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+}
+
+
+/* ========================================
+   PETIT MOBILE
+======================================== */
+
+@media (max-width: 400px) {
+
+    .admin-pneus-page {
+        padding: 15px 10px;
+    }
+
+    .admin-pneu-content {
+        padding: 12px;
+    }
+
+    .admin-pneu-image-container {
+        height: 120px;
+    }
+
+    .admin-pneu-image {
+        width: 105px;
+        height: 90px;
+    }
+
+}

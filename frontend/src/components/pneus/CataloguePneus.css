@@ -1,0 +1,129 @@
+.catalogue-section {
+
+    padding: 60px 5%;
+
+    background: #f7f7f7;
+
+}
+
+
+
+.catalogue-header {
+
+    text-align: center;
+
+    margin-bottom: 40px;
+
+}
+
+
+
+.catalogue-header h1 {
+
+    font-size: 35px;
+
+    font-weight: 700;
+
+    color: #222;
+
+}
+
+
+
+.catalogue-header p {
+
+    color: #666;
+
+    font-size: 17px;
+
+}
+
+
+
+
+.pneus-grid {
+
+
+    display: grid;
+
+    grid-template-columns: repeat(4, 1fr);
+
+    gap: 25px;
+
+
+}
+
+
+
+
+.loading,
+.error {
+
+    text-align: center;
+
+    padding: 50px;
+
+    font-size: 20px;
+
+}
+
+
+
+
+
+@media(max-width:1200px){
+
+
+    .pneus-grid{
+
+        grid-template-columns: repeat(3,1fr);
+
+    }
+
+}
+
+
+
+
+
+@media(max-width:768px){
+
+
+    .pneus-grid{
+
+        grid-template-columns: repeat(2,1fr);
+
+    }
+
+}
+
+
+
+
+
+@media(max-width:500px){
+
+
+    .pneus-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+}
+
+
+.btn-reset-filtres {
+  margin-top: 12px;
+  padding: 9px 16px;
+  border: 1px solid #d62828;
+  border-radius: 6px;
+  background: white;
+  color: #d62828;
+}
+
+.aucun-pneu {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 30px;
+}
