@@ -2,10 +2,13 @@
 
 Application web responsive réalisée dans le cadre du projet de fin d'études (PFE). Elle permet aux clients de consulter un catalogue de pneus, de rechercher des produits adaptés à leur véhicule, de gérer un panier et des commandes, puis de consulter les informations de facturation. Un espace d'administration permet de gérer les données commerciales. Le projet comprend également un chatbot et des notifications Telegram côté serveur.
 
-> **Important — sécurité :** `backend/.env` a été versionné dans l'historique Git de ce dépôt. Il est désormais ignoré et retiré de l'index, mais **les secrets qu'il contenait (mot de passe SMTP, clé Gemini, jeton Telegram, mots de passe base et administrateur) doivent être révoqués et remplacés**. Sauvegardez votre `backend/.env` local avant de récupérer le commit qui le retire : `git pull` le supprimera de votre copie de travail. Le modèle `backend/.env.example` ne contient que des noms de variables.
+> **Dépôt :** https://github.com/ngrassa/projet_Landolsi — nouvel historique Git, créé à partir de l'ancien dépôt `pfeMaster_minyar`. Les changements apportés sont résumés en [§0](#0-modifications-apportées-au-projet-initial).
+>
+> **Important — sécurité :** dans l'ancien dépôt, `backend/.env` était versionné. Ce nouveau dépôt ne contient ni ce fichier ni l'ancien historique, mais **les secrets qu'il contenait (mot de passe SMTP, clé Gemini, jeton Telegram, mots de passe base et administrateur) restent visibles dans l'ancien dépôt et doivent être révoqués et remplacés**. Le modèle `backend/.env.example` ne contient que des noms de variables ; `backend/.env` est ignoré par Git.
 
 ## Sommaire
 
+- [0. Modifications apportées au projet initial](#0-modifications-apportées-au-projet-initial)
 - [1. Présentation](#1-présentation)
 - [2. Fonctionnalités](#2-fonctionnalités)
 - [3. Technologies](#3-technologies)
@@ -26,6 +29,64 @@ Application web responsive réalisée dans le cadre du projet de fin d'études (
 - [18. Préparer la livraison finale](#18-préparer-la-livraison-finale)
 - [19. Limites et améliorations](#19-limites-et-améliorations)
 - [20. Déploiement en production (AWS EC2 Ubuntu)](#20-déploiement-en-production-aws-ec2-ubuntu)
+
+## 0. Modifications apportées au projet initial
+
+Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement métier (catalogue, panier, commandes, factures, avis, réclamations, chatbot, Telegram) est inchangé ; les modifications portent sur la compatibilité Linux, la sécurité, la configuration, la base de données et le déploiement. Détail et justification : [`docs/deployment/readme-recommendations.md`](docs/deployment/readme-recommendations.md) et [`docs/deployment/readiness-report.md`](docs/deployment/readiness-report.md).
+
+### Corrections bloquantes
+
+| Problème dans l'ancien projet | Conséquence | Correction |
+|---|---|---|
+| 11 imports frontend avec une casse incorrecte (`components/Pneus/...`, `AdminDashboard.css`, `bridgestone.png`, `pirelli.png`) | `npm run build` échouait sous Linux (fonctionnait uniquement sous Windows) | Chemins corrigés ; contrôle automatique `tests/deployment/check-import-case.cjs` |
+| `backend/routes/vehicule.js` importait `vehiculeController` au lieu de `VehiculeController` | L'API plantait au démarrage sous Linux | Chemin corrigé |
+| 26 URL `http://localhost:5001` codées en dur dans 22 fichiers React | Frontend inutilisable ailleurs que sur le poste de développement | `frontend/src/config.js` + variable `VITE_API_URL` (`/api` en production) |
+
+### Sécurité
+
+| Avant | Après |
+|---|---|
+| `POST/PUT/DELETE` sur `/pneus`, `/marques`, `/compatibilites` **sans authentification** | Réservés aux administrateurs (`requireAdmin`) ; appels marques envoyés avec le cookie de session |
+| Webhook `/telegram/webhook` public (envoi de messages par le bot à n'importe quel chat) | Désactivé tant que `TELEGRAM_WEBHOOK_SECRET` n'est pas défini |
+| Secret JWT codé en dur (`"net pneus secret"`) | `JWT_SECRET` obligatoire en production (≥ 32 caractères) ; ancien secret conservé seulement en développement |
+| Cookie de session `secure: false` codé en dur | `COOKIE_SECURE` (vrai par défaut en production) ; `clearCookie` avec les mêmes options |
+| CORS limité à `localhost` codé en dur | `CORS_ORIGINS` configurable |
+| Erreurs 500 renvoyant l'objet d'erreur complet au navigateur | Message générique en production |
+| `backend/.env` versionné ; `.env` commenté dans `.gitignore` | Fichier exclu, `.gitignore` racine et backend corrigés, modèle `.env.example` |
+| `bcrypt` utilisé sans import dans `middleware/inscription.js` | Import ajouté |
+
+### Configuration et exécution du backend
+
+- Nouveau module `backend/config/index.js` : lecture centralisée et **validation** des variables d'environnement (arrêt explicite si une variable obligatoire manque) ; tous les fichiers passent par lui (`dotenv` n'est plus appelé ailleurs).
+- `backend/db/db.js` : pool de connexions configurable, option TLS `DB_SSL` pour une base managée (Supabase, RDS).
+- `backend/app.js` : route **`GET /health`** (vérifie la base), démarrage uniquement après connexion à PostgreSQL, **arrêt propre** sur `SIGTERM`/`SIGINT` (fermeture du serveur, arrêt du polling Telegram, fermeture du pool), journaux `combined` en production, `trust proxy` derrière Nginx, `HOST`/`PORT` configurables, export de l'application pour les tests.
+- Images téléversées : répertoire configurable `UPLOAD_DIR` (défaut inchangé `backend/public/uploadPneu`), persistant en production.
+- Polling Telegram désactivable (`TELEGRAM_POLLING_ENABLED`) pour éviter deux instances concurrentes.
+- Suppression d'un `console.log` de débogage dans `UserModel.js`.
+
+### Base de données
+
+- `sync({ alter: true })` à chaque démarrage remplacé par `DB_SYNC` (`alter` en développement comme avant, `none` en production où `alter` est refusé).
+- **Migrations versionnées** avec `sequelize-cli` (`npm run db:migrate`) ; migration de référence non destructive.
+- Scripts `scripts/backup-db.sh` et `scripts/restore-db.sh` (sauvegarde `pg_dump` + SHA-256 + métadonnées, restauration transactionnelle, refus d'écraser une base non vide) ; sauvegarde quotidienne et avant chaque déploiement.
+
+### Tests ajoutés
+
+- 12 tests backend (`npm test`) : validation de la configuration, `/health`, refus 401/403 des routes d'administration, inscription/connexion par cookie.
+- `tests/deployment/backup-restore.test.sh` : restauration vérifiée (comptages, séquences, schéma).
+- `tests/deployment/run-local-checks.sh` : exécute toutes les vérifications (casse des imports, build, scripts shell, Terraform, migrations, sauvegarde).
+
+### Déploiement (nouveau)
+
+- `scripts/install.sh`, `deploy.sh`, `rollback.sh`, `health-check.sh` ; unités `systemd/` ; site `nginx/landolsi.conf`.
+- Terraform `infra/aws/` + `infra/cloud-init/` pour une instance EC2 Ubuntu 24.04, adapté aux restrictions AWS Academy (Security Group existant, clé SSH injectée par cloud-init).
+- Documentation `docs/deployment/` : architecture, stratégie de base, sauvegarde/restauration, AWS Academy, dépannage, retour arrière.
+
+### Non modifié (à traiter par l'équipe)
+
+- 17 erreurs `npm run lint` existantes, dont `setAvis` non défini dans `frontend/src/pages/CommandeDetails/CommandeDetails.jsx:148` (erreur à l'exécution sur ce chemin).
+- Pas de limitation des tentatives de connexion ; dépendances anciennes (Express 4.16, `jade`).
+- Déploiement AWS non réalisé : sur le compte AWS Academy utilisé (« Student View »), `ec2:RunInstances` est refusé par la politique du lab (voir [§20](#20-déploiement-en-production-aws-ec2-ubuntu)).
 
 ## 1. Présentation
 
@@ -79,7 +140,7 @@ Les accès aux opérations administrateur doivent être protégés par les contr
 ## 4. Architecture du dépôt
 
 ```text
-pfeMaster-master/
+projet_Landolsi/
 ├── backend/
 │   ├── app.js                  # Configuration Express, routes, /health, démarrage et arrêt propre
 │   ├── config/index.js         # Lecture et validation des variables d'environnement
@@ -136,11 +197,9 @@ Supprimez l'espace placé avant `git` si vous copiez la troisième commande dans
 
 ## 6. Récupérer le projet depuis une URL Git
 
-Remplacez `<URL_DU_DEPOT>` par l'URL HTTPS ou SSH réelle du dépôt. Cette URL n'est pas incluse dans cette documentation.
-
 ```bash
-git clone <URL_DU_DEPOT>
-cd pfeMaster-master
+git clone https://github.com/ngrassa/projet_Landolsi.git
+cd projet_Landolsi
 ```
 
 Si le nom du dossier créé est différent, entrez dans ce dossier à la place. Si le projet est fourni en ZIP, décompressez-le puis ouvrez un terminal dans le dossier racine contenant `backend/` et `frontend/`.
@@ -522,7 +581,7 @@ terraform output ssh_command
 
 # 2. Sur l'instance
 ssh -i ~/.ssh/labsuser.pem ubuntu@<IP>
-sudo git clone <URL_DU_DEPOT> /opt/landolsi-src
+sudo git clone https://github.com/ngrassa/projet_Landolsi.git /opt/landolsi-src
 sudo /opt/landolsi-src/scripts/install.sh
 sudo nano /etc/landolsi/backend.env              # SMTP, Gemini, Telegram, ADMIN_* (nouveaux secrets)
 sudo /opt/landolsi-src/scripts/deploy.sh --source /opt/landolsi-src
@@ -535,7 +594,11 @@ sudo -u landolsi env NODE_ENV=production ENV_FILE=/etc/landolsi/backend.env node
 /opt/landolsi/current/scripts/health-check.sh
 ```
 
-Ouvrir ensuite `http://<IP>/`. Sans Terraform, créer l'instance dans la console (Ubuntu 24.04, SSH limité à votre IP, HTTP ouvert, IMDSv2) puis reprendre à l'étape 2.
+Ouvrir ensuite `http://<IP>/`.
+
+**AWS Academy :** le lab interdit la création de Security Group par Terraform et l'import de clés SSH ; créez le groupe avec l'AWS CLI et renseignez `security_group_id` et `ssh_public_key` dans `terraform.tfvars` (procédure : [`docs/deployment/aws-academy-deployment.md`](docs/deployment/aws-academy-deployment.md) §2). Vérifiez aussi que votre compte peut lancer une instance (`aws ec2 run-instances --dry-run ...` doit répondre `DryRunOperation`) : lors du test du 2026-10-29, le compte « Student View » utilisé le refusait ; un *Learner Lab* démarré ou un compte AWS standard est nécessaire.
+
+Sans Terraform, créer l'instance dans la console (Ubuntu 24.04, SSH limité à votre IP, HTTP ouvert, IMDSv2) puis reprendre à l'étape 2.
 
 Reprise des données existantes (export de `pneus_db` depuis le poste, transfert, restauration, images) : [`docs/deployment/database-backup-restore.md`](docs/deployment/database-backup-restore.md) §3.
 
