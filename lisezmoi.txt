@@ -10,6 +10,23 @@ FAIT
 - Script de restauration et workflow GitHub Actions poussés (commit 7c56cf7).
 - Restauration testée sur le serveur : comptages identiques à la production.
 
+INFRASTRUCTURE DÉTRUITE (terraform destroy, 30/10/2026 ~16h45 UTC)
+- Instance i-03337a82d69d55ee7 terminée, IP élastique 18.213.152.8 libérée,
+  règles du Security Group supprimées (le Security Group lui-même existe encore).
+- Le site https://landolsi-tires-18-213-152-8.sslip.io n'existe plus ; au
+  prochain déploiement, l'IP et donc le nom sslip.io changeront.
+- Dernière sauvegarde prise juste avant (PLUS RÉCENTE que la référence :
+  39 commandes / 11 factures au lieu de 38 / 10), sur le poste d'administration :
+    ~/.local/share/landolsi/backups/landolsi_tires_final_20261030T164228Z.dump.gpg
+    ~/.local/share/landolsi/backups/landolsi_tires_final_20261030T164228Z.dump.sha256.txt
+    ~/.local/share/landolsi/backups/uploads_final_20261030T164228Z.tar.gz.gpg  (images)
+  Même phrase secrète. Pour redéployer avec ces données, en faire la nouvelle
+  référence (§6) ou la restaurer à la main :
+    scripts/restore-encrypted-backup.sh --checksums-dir /dev/null \
+        --archive ~/.local/share/landolsi/backups/landolsi_tires_final_20261030T164228Z.dump.gpg \
+        --passphrase-file ~/.config/landolsi/db-backup.passphrase --decrypt-only /tmp/landolsi_tires.dump
+    gpg -d ~/.local/share/landolsi/backups/uploads_final_20261030T164228Z.tar.gz.gpg | tar xzf -
+
 PREMIER TEST DU PIPELINE (exécution 41091349816)
 - Échec attendu à l'étape "Télécharger l'archive chiffrée" :
     ##[error]secret DB_BACKUP_URL absent
