@@ -58,7 +58,8 @@ ShellCheck 0.11.0.
 
 | Élément | Raison | Action requise |
 |---|---|---|
-| Création de l'instance EC2 | Tentative du 2026-10-29 : `terraform plan` OK, Security Group et 3 règles d'entrée créés, mais **`ec2:RunInstances` refusé** par la politique du lab (rôle `voclabs` « Student View », toutes AMI/types/régions) | Faire autoriser le lancement d'instances (enseignant / Learner Lab démarré avec crédit), puis `terraform plan` et `apply` |
+| Création de l'instance EC2 | 2026-10-29 : `ec2:RunInstances` refusé par la politique du lab. **2026-10-30 : réalisée** (Terraform + cloud-init, ~2 min), IP élastique, HTTPS Let's Encrypt sur `landolsi-tires-18-213-152-8.sslip.io`, `/api/health` OK | — |
+| Reprise des données `pneus_db` | Aucune sauvegarde de la base de développement trouvée ; base déployée vide (hors compte administrateur) | Obtenir `pg_dump --format=custom` de `pneus_db`, puis database-backup-restore.md §3 |
 | `install.sh` sur Ubuntu neuve | Pas de VM/Docker ; nécessite root | Exécuter sur l'EC2 ; surveiller la sortie |
 | Unités systemd et `nginx -t` | systemd/Nginx non disponibles localement | Vérifiés par `install.sh` (`nginx -t`) et `deploy.sh` (contrôle de santé via Nginx) |
 | Sauvegarde de la base réelle `pneus_db` | Serveur PostgreSQL de dev non démarré/inaccessible | Procédure database-backup-restore.md §3 |

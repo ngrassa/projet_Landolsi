@@ -12,6 +12,7 @@
 #   --pg-client-version N  installer postgresql-client-N depuis apt.postgresql.org
 #                          (nécessaire si la base distante est plus récente que le client Ubuntu)
 #   --domain / --email     obtenir un certificat Let's Encrypt (certbot) et activer HTTPS
+#                          (--email facultatif ; sans domaine acheté : <nom>-<IP-avec-tirets>.sslip.io)
 #   --node-major N         version majeure de Node.js (défaut 22, LTS)
 #   --no-firewall          ne pas configurer ufw
 #
@@ -27,7 +28,7 @@ EMAIL=""
 NODE_MAJOR=22
 FIREWALL=1
 
-usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -45,7 +46,7 @@ done
 [[ $EUID -eq 0 ]] || die "à exécuter en root (sudo)"
 [[ "$NODE_MAJOR" =~ ^[0-9]+$ ]] || die "--node-major invalide" 2
 [[ -z "$PG_CLIENT_VERSION" || "$PG_CLIENT_VERSION" =~ ^[0-9]+$ ]] || die "--pg-client-version invalide" 2
-if [[ -n "$DOMAIN" && -z "$EMAIL" ]]; then die "--domain nécessite --email" 2; fi
+if [[ -n "$EMAIL" && -z "$DOMAIN" ]]; then die "--email nécessite --domain" 2; fi
 
 . /etc/os-release
 [[ "${ID:-}" == "ubuntu" ]] || die "système non pris en charge : ${PRETTY_NAME:-inconnu} (Ubuntu requis)"
@@ -238,7 +239,16 @@ if [[ -n "$DOMAIN" ]]; then
     log "Obtention du certificat TLS pour ${DOMAIN}..."
     apt-get install -y -q certbot python3-certbot-nginx
     sed -i "s/server_name _;/server_name ${DOMAIN};/" /etc/nginx/sites-available/landolsi
-    certbot --nginx --non-interactive --agree-tos -m "$EMAIL" -d "$DOMAIN" --redirect
+    if [[ -n "$EMAIL" ]]; then CERTBOT_ACCOUNT=(-m "$EMAIL"); else CERTBOT_ACCOUNT=(--register-unsafely-without-email); fi
+    certbot --nginx --non-interactive --agree-tos "${CERTBOT_ACCOUNT[@]}" -d "$DOMAIN" --redirect
+    # certbot répond 404 aux requêtes HTTP sans ce nom (accès par IP) : rediriger vers le site
+    sed -i "s|return 404; # managed by Certbot|return 301 https://${DOMAIN}\$request_uri; # IP nue -> domaine|" \
+        /etc/nginx/sites-available/landolsi
+    nginx -t && systemctl reload nginx
+    # Fichier d'environnement déjà existant (installation initiale sans domaine)
+    set_env COOKIE_SECURE true
+    set_env CORS_ORIGINS "https://${DOMAIN}"
+    systemctl try-restart landolsi-backend
 fi
 
 log "Installation terminée."

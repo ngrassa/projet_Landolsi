@@ -12,7 +12,7 @@ préparation) :
 | Contrainte | Conséquence |
 |---|---|
 | Session limitée (environ 4 h), instances arrêtées à la fin | Les services sont `enabled` et redémarrent au démarrage suivant ; le timer de sauvegarde rattrape l'exécution manquée |
-| IP publique changée à chaque arrêt/démarrage | Utiliser `allocate_eip = true` (si autorisé) ou relire l'IP ; pas de nom de domaine stable → HTTP seulement |
+| IP publique changée à chaque arrêt/démarrage | `allocate_eip = true` (autorisé, vérifié le 2026-10-30) : IP fixe, puis domaine sslip.io + HTTPS (§9) |
 | Création de rôles IAM interdite | Ne rien créer côté IAM ; utiliser `LabInstanceProfile` si un profil est nécessaire |
 | Paire de clés fournie : `vockey` | Télécharger `labsuser.pem` depuis *AWS Details* |
 | Régions et types d'instance restreints | Généralement `us-east-1` / `us-west-2`, familles t2/t3 jusqu'à `large` |
@@ -47,13 +47,15 @@ terraform apply tfplan
 terraform output
 ```
 
-**Restrictions constatées le 2026-10-29 sur un compte AWS Academy (rôle `voclabs`, « Student View ») :**
+**Restrictions constatées les 29 et 30 octobre 2026 sur un compte AWS Academy (rôle `voclabs`, « Student View ») :**
 
 | Action | Résultat | Contournement dans ce dépôt |
 |---|---|---|
 | `ec2:RevokeSecurityGroupEgress` | Refusée ; le provider AWS l'appelle toujours en créant un `aws_security_group` | Créer le groupe avec l'AWS CLI (ci-dessous), puis `security_group_id = "sg-..."` |
 | `ec2:ImportKeyPair` | Refusée | `ssh_public_key` est injectée par cloud-init ; la paire `vockey` reste attachée |
-| `ec2:RunInstances` | **Refusée** (toutes AMI, tous types, us-east-1 et us-west-2, même en `--dry-run`) | Aucun : à faire débloquer par l'enseignant ; utiliser un compte *Learner Lab* standard, démarré (« Start Lab ») et disposant de crédit |
+| `ec2:RunInstances` | Refusée le 29/10 (toutes AMI, tous types, us-east-1 et us-west-2), **autorisée le 30/10** sur le même compte | Tester avec `--dry-run` (ci-dessous) au début de chaque session |
+| Réinitialisation du lab | Le Security Group créé la veille avait disparu le 30/10 ; l'état Terraform référençait encore ses règles | Recréer le groupe, `terraform state rm` des 3 règles `aws_vpc_security_group_ingress_rule.*`, mettre à jour `security_group_id` |
+| `AllocateAddress` (IP élastique) | Autorisée | `allocate_eip = true` |
 | `AuthorizeSecurityGroupIngress`, `CreateSecurityGroup` | Autorisées | — |
 
 Tester les permissions avant `apply`, sans rien créer :
@@ -174,16 +176,28 @@ journal d'accès au format `combined` en production.
 
 ## 9. HTTPS
 
-Sans nom de domaine (cas habituel du lab), le site est en HTTP et
-`COOKIE_SECURE=false` : le cookie de session circule en clair. Acceptable pour
-une démonstration, **pas pour de vraies données clients**.
+Sans nom de domaine, le site est en HTTP et `COOKIE_SECURE=false` : le cookie
+de session circule en clair. Acceptable pour une démonstration, **pas pour de
+vraies données clients**.
 
-Avec un domaine pointant vers l'IP (idéalement élastique) :
+Un nom de domaine gratuit suffit : [sslip.io](https://sslip.io) résout
+`<nom>-<IP avec des tirets>.sslip.io` vers l'IP. Avec une IP élastique
+(`allocate_eip = true`), le nom reste stable entre deux sessions.
+
 ```bash
-sudo /opt/landolsi-src/scripts/install.sh --domain app.exemple.com --email vous@exemple.com
-sudo sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=true/' /etc/landolsi/backend.env
-sudo systemctl restart landolsi-backend
+# Exemple réel (2026-10-30) : IP élastique 18.213.152.8
+sudo /opt/landolsi-src/scripts/install.sh --domain landolsi-tires-18-213-152-8.sslip.io
+#   --email vous@exemple.com : facultatif (avis d'expiration Let's Encrypt)
 ```
+
+`install.sh` obtient le certificat, redirige HTTP et l'accès par IP nue vers
+`https://<domaine>`, met `COOKIE_SECURE=true` et `CORS_ORIGINS=https://<domaine>`
+dans `/etc/landolsi/backend.env` et redémarre l'API. Le renouvellement est
+automatique (`certbot.timer`). Relancer `install.sh` sans `--domain` remet la
+configuration Nginx HTTP.
+
+L'IP élastique **remplace** l'IP publique temporaire : l'ancienne adresse cesse
+immédiatement de répondre.
 
 ## 10. Arrêt et coûts
 

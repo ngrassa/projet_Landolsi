@@ -86,7 +86,19 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 
 - 17 erreurs `npm run lint` existantes, dont `setAvis` non défini dans `frontend/src/pages/CommandeDetails/CommandeDetails.jsx:148` (erreur à l'exécution sur ce chemin).
 - Pas de limitation des tentatives de connexion ; dépendances anciennes (Express 4.16, `jade`).
-- Déploiement AWS non réalisé : sur le compte AWS Academy utilisé (« Student View »), `ec2:RunInstances` est refusé par la politique du lab (voir [§20](#20-déploiement-en-production-aws-ec2-ubuntu)).
+- Données de développement non migrées : la base `pneus_db` du poste de développement n'a pas été retrouvée (aucune sauvegarde disponible) ; la base déployée est vide hormis le compte administrateur. Procédure de reprise dès qu'une sauvegarde est fournie : [§20](#reprise-des-données-de-développement).
+
+### Déploiement AWS réalisé (30 octobre 2026)
+
+| Élément | Valeur |
+|---|---|
+| URL publique | **https://landolsi-tires-18-213-152-8.sslip.io** (l'IP `18.213.152.8` redirige vers cette adresse) |
+| Instance | EC2 `t3.small`, Ubuntu 24.04, `us-east-1`, provisionnée par Terraform, installée par cloud-init |
+| IP | IP élastique fixe `18.213.152.8` (conservée entre deux sessions du lab) |
+| HTTPS | Certificat Let's Encrypt, renouvellement automatique (`certbot.timer`) |
+| Contrôles | `/api/health` → `{"status":"ok","database":"up"}` ; connexion administrateur vérifiée |
+
+Le 29 octobre, `ec2:RunInstances` était refusé sur le compte AWS Academy ; il est autorisé depuis le 30 octobre. Corrections intégrées à `scripts/install.sh` à la suite de ce déploiement : `--email` facultatif avec `--domain`, mise à jour de `COOKIE_SECURE`/`CORS_ORIGINS` lorsque HTTPS est activé après la première installation, redirection de l'accès par IP vers le nom de domaine (Certbot répondait 404).
 
 ## 1. Présentation
 
@@ -596,11 +608,47 @@ sudo -u landolsi env NODE_ENV=production ENV_FILE=/etc/landolsi/backend.env node
 
 Ouvrir ensuite `http://<IP>/`.
 
-**AWS Academy :** le lab interdit la création de Security Group par Terraform et l'import de clés SSH ; créez le groupe avec l'AWS CLI et renseignez `security_group_id` et `ssh_public_key` dans `terraform.tfvars` (procédure : [`docs/deployment/aws-academy-deployment.md`](docs/deployment/aws-academy-deployment.md) §2). Vérifiez aussi que votre compte peut lancer une instance (`aws ec2 run-instances --dry-run ...` doit répondre `DryRunOperation`) : lors du test du 2026-10-29, le compte « Student View » utilisé le refusait ; un *Learner Lab* démarré ou un compte AWS standard est nécessaire.
+**AWS Academy :** le lab interdit la création de Security Group par Terraform et l'import de clés SSH ; créez le groupe avec l'AWS CLI et renseignez `security_group_id` et `ssh_public_key` dans `terraform.tfvars` (procédure : [`docs/deployment/aws-academy-deployment.md`](docs/deployment/aws-academy-deployment.md) §2). Vérifiez aussi que votre compte peut lancer une instance (`aws ec2 run-instances --dry-run ...` doit répondre `DryRunOperation`) : refusé le 2026-10-29, autorisé le 2026-10-30 sur le même compte.
+
+**Nouvelle session du lab :** recopiez les identifiants dans `~/.aws/credentials`, puis vérifiez que le Security Group de `terraform.tfvars` existe encore (`aws ec2 describe-security-groups --group-ids sg-...`). Une réinitialisation du lab peut le supprimer : recréez-le, retirez les anciennes règles de l'état (`terraform state rm aws_vpc_security_group_ingress_rule.ssh ...`) et relancez `terraform plan`. Mettez aussi à jour `ssh_allowed_cidr` si votre IP a changé.
+
+Avec `git_repo_url = "https://github.com/ngrassa/projet_Landolsi.git"` dans `terraform.tfvars`, cloud-init exécute automatiquement l'étape 2 (environ 2 minutes, journal : `/var/log/cloud-init-output.log`).
 
 Sans Terraform, créer l'instance dans la console (Ubuntu 24.04, SSH limité à votre IP, HTTP ouvert, IMDSv2) puis reprendre à l'étape 2.
 
-Reprise des données existantes (export de `pneus_db` depuis le poste, transfert, restauration, images) : [`docs/deployment/database-backup-restore.md`](docs/deployment/database-backup-restore.md) §3.
+### IP fixe et HTTPS
+
+1. **IP fixe :** `allocate_eip = true` dans `terraform.tfvars`, puis `terraform plan`/`apply`. L'IP élastique **remplace** l'IP publique temporaire de l'instance (l'ancienne adresse cesse de fonctionner) et reste identique après arrêt/démarrage. Coût : environ 0,005 $/h, y compris instance arrêtée.
+2. **Nom de domaine :** sans domaine acheté, utilisez [sslip.io](https://sslip.io), qui résout `<nom>-<IP avec des tirets>.sslip.io` vers l'IP (aucun compte nécessaire), par exemple `landolsi-tires-18-213-152-8.sslip.io`. Avec un domaine acheté, créez un enregistrement `A` vers l'IP élastique.
+3. **Certificat :**
+   ```bash
+   sudo /opt/landolsi-src/scripts/install.sh --domain landolsi-tires-18-213-152-8.sslip.io   # --email facultatif
+   ```
+   Le script obtient le certificat Let's Encrypt, redirige HTTP et l'accès par IP vers `https://<domaine>`, passe `COOKIE_SECURE=true` et `CORS_ORIGINS=https://<domaine>`, puis redémarre l'API.
+
+Relancer `install.sh` **sans** `--domain` remet la configuration Nginx HTTP d'origine (HTTPS désactivé). Si l'IP élastique est perdue (`terraform destroy`, réinitialisation du lab), le nom sslip.io change : refaire l'étape 3 avec le nouveau nom.
+
+### Compte administrateur sans écrire le mot de passe sur le disque
+
+```bash
+cd /opt/landolsi/current/backend
+sudo -u landolsi env NODE_ENV=production ENV_FILE=/etc/landolsi/backend.env \
+    ADMIN_EMAIL=admin@landolsi.com ADMIN_PASSWORD='<mot de passe robuste>' node createAdmin.js
+```
+
+Le site étant public, n'utilisez pas de mot de passe faible ; relancer la commande réinitialise le mot de passe.
+
+### Reprise des données de développement
+
+Procédure complète (export de `pneus_db` depuis le poste, transfert, restauration, images) : [`docs/deployment/database-backup-restore.md`](docs/deployment/database-backup-restore.md) §3.
+
+`scripts/restore-db.sh` a besoin d'une **sauvegarde de la base source** : le dépôt Git ne contient que le code. La sauvegarde présente sur le serveur (`/var/backups/landolsi/landolsi_tires_*.dump`, créée automatiquement avant la première migration) est celle d'une base vide. Sur le poste qui héberge `pneus_db` :
+
+```powershell
+pg_dump -h localhost -U postgres --format=custom -f pneus_db.dump pneus_db
+```
+
+La base du serveur contient déjà les tables et le compte administrateur : `restore-db.sh` refuse alors de restaurer (code 3). Après une sauvegarde (`sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh`), ajoutez `--allow-nonempty` (opération destructive : les tables présentes dans l'archive sont recréées, le compte administrateur de la sauvegarde remplace celui du serveur), puis copiez les images dans `/var/lib/landolsi/uploads`.
 
 ### Exploitation
 
