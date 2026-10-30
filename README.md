@@ -86,7 +86,7 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 
 - 17 erreurs `npm run lint` existantes, dont `setAvis` non défini dans `frontend/src/pages/CommandeDetails/CommandeDetails.jsx:148` (erreur à l'exécution sur ce chemin).
 - Pas de limitation des tentatives de connexion ; dépendances anciennes (Express 4.16, `jade`).
-- Données de développement non migrées : la base `pneus_db` du poste de développement n'a pas été retrouvée (aucune sauvegarde disponible) ; la base déployée est vide hormis le compte administrateur. Procédure de reprise dès qu'une sauvegarde est fournie : [§20](#reprise-des-données-de-développement).
+- Données de développement **importées le 30 octobre 2026** depuis le dump SQL `LANDOLSI_TIRES.sql` (PostgreSQL 17.10) : 12 utilisateurs, 8 marques, 9 pneus, 38 commandes, 10 factures, 13 avis. Lors de l'import : 385 contraintes `UNIQUE` en double (créées par les anciens `sync({ alter: true })`) ont été supprimées, les tables `avis_likes` et `reponses_avis` (absentes du code de ce dépôt) ont été conservées, et les colonnes `users.activite` et `users.identifiantEntreprise` (attendues par `UserModel.js`, absentes du dump) ont été ajoutées. Le compte administrateur est désormais celui du dump (mot de passe du poste de développement). Sauvegarde avant import : `/var/backups/landolsi/landolsi_tires_20261030T161213Z.dump` ; sauvegarde après import chiffrée, conservée hors dépôt ([§20](#sauvegarde-chiffrée-et-restauration-cicd)).
 
 ### Déploiement AWS réalisé (30 octobre 2026)
 
@@ -649,6 +649,10 @@ pg_dump -h localhost -U postgres --format=custom -f pneus_db.dump pneus_db
 ```
 
 La base du serveur contient déjà les tables et le compte administrateur : `restore-db.sh` refuse alors de restaurer (code 3). Après une sauvegarde (`sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh`), ajoutez `--allow-nonempty` (opération destructive : les tables présentes dans l'archive sont recréées, le compte administrateur de la sauvegarde remplace celui du serveur), puis copiez les images dans `/var/lib/landolsi/uploads`.
+
+### Sauvegarde chiffrée et restauration CI/CD
+
+La base de production du 30 octobre 2026 est sauvegardée **chiffrée** (GPG AES-256) **hors de ce dépôt public** ; seules ses sommes SHA-256 de référence sont versionnées dans `db/backup/`. Le workflow `.github/workflows/db-restore.yml` télécharge l'archive depuis un stockage privé (`DB_BACKUP_URL`), vérifie sa somme et la restaure dans un PostgreSQL éphémère (`verify`) ou, sur déclenchement manuel confirmé, sur l'EC2 (`restore-ec2`). Restauration manuelle : `DB_BACKUP_PASSPHRASE=… scripts/restore-encrypted-backup.sh --archive <archive.gpg> -- --target-db <base> --create`. Consignes : [`lisezmoi.txt`](lisezmoi.txt) ; détails : [`docs/deployment/database-backup-restore.md`](docs/deployment/database-backup-restore.md) §6.
 
 ### Exploitation
 

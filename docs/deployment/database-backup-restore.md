@@ -158,3 +158,75 @@ identiques**, séquences identiques, schéma identique, refus d'une base non vid
 
 Non vérifié : sauvegarde de la base réelle `pneus_db` (inaccessible depuis
 l'environnement de travail) et restauration sur l'EC2.
+
+## 6. Sauvegarde chiffrée hors dépôt et restauration par CI/CD
+
+Sauvegarde de référence du 30 octobre 2026 (base de production après import
+des données de développement : 12 utilisateurs, 9 pneus, 38 commandes,
+10 factures, 13 avis) : archive `pg_dump --format=custom` (PostgreSQL 16)
+chiffrée GPG AES-256, `landolsi_tires.dump.gpg`.
+
+Le dépôt étant **public**, l'archive n'y est **pas** versionnée, même
+chiffrée (une fois publiée, elle ne peut plus être retirée). Seules les sommes
+de référence le sont, dans `db/backup/` :
+
+| Fichier | Contenu |
+|---|---|
+| `landolsi_tires.dump.gpg.sha256` | somme de l'archive chiffrée : désigne la version attendue par le pipeline |
+| `landolsi_tires.dump.sha256.txt` | somme de l'archive déchiffrée (identique à celle calculée sur le serveur) |
+
+| Élément | Emplacement |
+|---|---|
+| Archive chiffrée | poste d'administration : `~/.local/share/landolsi/backups/landolsi_tires.dump.gpg` ; à copier dans un stockage privé (dépôt GitHub privé, bucket S3 privé) |
+| Phrase secrète | `~/.config/landolsi/db-backup.passphrase` + secret GitHub `DB_BACKUP_PASSPHRASE` ; à garder aussi dans un gestionnaire de mots de passe (sans elle, l'archive est irrécupérable) |
+| Sauvegardes du serveur | `/var/backups/landolsi/` (quotidiennes, en clair, mode 0600) |
+
+**Restauration manuelle :**
+```bash
+# dans une nouvelle base (archive par défaut : ~/.local/share/landolsi/backups/)
+DB_BACKUP_PASSPHRASE='…' scripts/restore-encrypted-backup.sh -- \
+    --target-db landolsi_verif --create --env-file backend/.env
+# déchiffrer seulement (puis restore-db.sh --file …)
+scripts/restore-encrypted-backup.sh --archive /chemin/landolsi_tires.dump.gpg \
+    --passphrase-file ~/.config/landolsi/db-backup.passphrase --decrypt-only /tmp/landolsi_tires.dump
+```
+Le script refuse une archive dont la somme ne correspond pas à
+`db/backup/landolsi_tires.dump.gpg.sha256`.
+
+**Stockage privé conseillé (dépôt GitHub privé) :**
+```bash
+gh repo create ngrassa/landolsi-backups --private --clone && cd landolsi-backups
+cp ~/.local/share/landolsi/backups/landolsi_tires.dump.gpg . && git add . && git commit -m "Sauvegarde 2026-10-30" && git push -u origin HEAD
+```
+Secrets GitHub du dépôt applicatif : `DB_BACKUP_URL` =
+`https://raw.githubusercontent.com/ngrassa/landolsi-backups/main/landolsi_tires.dump.gpg`
+(adapter la branche) et `DB_BACKUP_TOKEN` = jeton *fine-grained* en lecture
+seule (*Contents: Read*) limité à `landolsi-backups`. Avec S3 : URL présignée
+dans `DB_BACKUP_URL`, sans jeton (durée de validité limitée).
+
+**Pipeline GitHub Actions** (`.github/workflows/db-restore.yml`) :
+
+- `verify` : à chaque modification de `db/backup/` ou des scripts, et sur
+  demande. Télécharge l'archive, vérifie sa somme, la restaure dans un
+  PostgreSQL 16 éphémère et contrôle les comptages. Aucun effet sur le serveur.
+- `restore-ec2` : manuel uniquement (*Actions → Restauration base de données →
+  Run workflow*, `target = ec2`, `confirm = RESTAURER`), dans l'environnement
+  GitHub `production` (ajoutez-y des relecteurs obligatoires pour exiger une
+  approbation). Sauvegarde la base du serveur, arrête l'API, restaure avec
+  `--allow-nonempty`, redémarre et contrôle `/health`. Secrets : `EC2_HOST`,
+  `EC2_SSH_KEY`, `EC2_KNOWN_HOSTS` (`ssh-keyscan -t ed25519 <IP>`). Le Security
+  Group limite SSH à l'IP de l'administrateur : ouvrez temporairement le port 22
+  aux runners GitHub ou utilisez un runner auto-hébergé.
+
+**Mettre à jour la sauvegarde de référence :**
+```bash
+B=~/.local/share/landolsi/backups
+F=$(ssh ubuntu@<IP> 'sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh >/dev/null && sudo sh -c "ls -1t /var/backups/landolsi/landolsi_tires_*.dump | head -1"')
+ssh ubuntu@<IP> "sudo cat $F" > /tmp/landolsi_tires.dump
+gpg --batch --yes --pinentry-mode loopback --passphrase-file ~/.config/landolsi/db-backup.passphrase \
+    --symmetric --cipher-algo AES256 -o $B/landolsi_tires.dump.gpg /tmp/landolsi_tires.dump
+(cd $B && sha256sum landolsi_tires.dump.gpg) > db/backup/landolsi_tires.dump.gpg.sha256
+sha256sum /tmp/landolsi_tires.dump | awk '{print $1"  landolsi_tires.dump"}' > db/backup/landolsi_tires.dump.sha256.txt
+shred -u /tmp/landolsi_tires.dump
+# puis : copier $B/landolsi_tires.dump.gpg dans le stockage privé, commiter db/backup/
+```
