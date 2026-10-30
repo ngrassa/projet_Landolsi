@@ -1,6 +1,31 @@
 LANDOLSI TIRES - Sauvegarde chiffrée de la base et restauration CI/CD
 =======================================================================
 
+0. OÙ EN EST-ON ? (état au 30 octobre 2026)
+-------------------------------------------
+FAIT
+- Données de développement importées sur le serveur (LANDOLSI_TIRES.sql).
+- Sauvegarde post-import chiffrée, conservée HORS du dépôt public
+  (emplacements au §2).
+- Script de restauration et workflow GitHub Actions poussés (commit 7c56cf7).
+- Restauration testée sur le serveur : comptages identiques à la production.
+
+PREMIER TEST DU PIPELINE (exécution 41091349816)
+- Échec attendu à l'étape "Télécharger l'archive chiffrée" :
+    ##[error]secret DB_BACKUP_URL absent
+- Les étapes précédentes sont passées. La restauration n'a pas encore été
+  testée sur GitHub.
+
+RESTE À FAIRE (détail au §5)
+  [ ] a) créer le dépôt privé ngrassa/landolsi-backups et y pousser l'archive
+  [ ] b) créer un jeton fine-grained en lecture seule sur ce dépôt
+  [ ] c) déposer les secrets DB_BACKUP_PASSPHRASE, DB_BACKUP_URL, DB_BACKUP_TOKEN
+  [ ] d) relancer le test :
+         gh workflow run db-restore.yml --repo ngrassa/projet_Landolsi
+         gh run list --repo ngrassa/projet_Landolsi --limit 3
+  [ ] e) (plus tard) secrets EC2_* pour le job restore-ec2
+  [ ] Copier la phrase secrète dans un gestionnaire de mots de passe.
+
 1. PRINCIPE
 -----------
 - Le dépôt GitHub est PUBLIC. La sauvegarde de la base (e-mails, téléphones,
@@ -82,7 +107,7 @@ c) Déposer les secrets dans le dépôt projet_Landolsi :
    Adapter "main" si la branche du dépôt privé porte un autre nom.
    Alternative S3 : URL présignée dans DB_BACKUP_URL, sans DB_BACKUP_TOKEN.
 
-d) Commiter et pousser (déclenche le job verify) :
+d) Pousser une modification (déclenche le job verify) - déjà fait le 30/10 :
 
      git add .gitignore README.md lisezmoi.txt docs/deployment/database-backup-restore.md \
          .github db/backup scripts/restore-encrypted-backup.sh
