@@ -53,6 +53,8 @@ import AdminCommandes from "./components/admin/AdminCommandes";
 import AdminUtilisateurs from "./components/admin/AdminUtilisateurs";
 import GestionMarques from "./components/admin/GestionMarques";
 import GestionReclamations from "./components/admin/GestionReclamations";
+import AdminSecurite from "./components/admin/AdminSecurite";
+import AdminAssistantIA from "./components/admin/AdminAssistantIA";
 
 // ========================================
 // CHATBOT
@@ -284,6 +286,17 @@ function AppContent() {
                     path="/admin/utilisateurs"
                     element={<AdminUtilisateurs />}
                 />
+
+                <Route
+                    path="/admin/securite"
+                    element={<AdminSecurite />}
+                />
+
+                <Route
+                    path="/admin/assistant-ia"
+                    element={<AdminAssistantIA />}
+                />
+
                 <Route
                     path="/admin/reclamations"
                     element={<GestionReclamations />}

@@ -108,3 +108,68 @@ test("inscription, connexion par cookie et refus des droits admin (403)", opts, 
     const forbidden = await fetch(`${baseUrl}/pneus/1`, { method: "DELETE", headers: { cookie } });
     assert.strictEqual(forbidden.status, 403);
 });
+
+test("double authentification : enrôlement puis connexion en deux étapes", opts, async () => {
+    const { authenticator } = require("otplib");
+    const email = `mfa-${Date.now()}@example.com`;
+    const password = "Motdepasse123";
+    const json = { "Content-Type": "application/json" };
+
+    await fetch(`${baseUrl}/users/register`, {
+        method: "POST", headers: json,
+        body: JSON.stringify({
+            nom: "Test", prenom: "MFA", email, password,
+            telephone: "12345678", adresse: "1 rue Test", ville: "Sousse",
+            codePostal: "4000", pays: "Tunisie", typeClient: "particulier"
+        })
+    });
+
+    const login1 = await fetch(`${baseUrl}/users/login`, {
+        method: "POST", headers: json, body: JSON.stringify({ email, password })
+    });
+    const cookie = (login1.headers.get("set-cookie") || "").split(";")[0];
+    const auth = { ...json, cookie };
+
+    const setup = await (await fetch(`${baseUrl}/users/mfa/setup`, { method: "POST", headers: auth })).json();
+    assert.ok(setup.qrCode && setup.secret);
+
+    const bad = await fetch(`${baseUrl}/users/mfa/enable`, {
+        method: "POST", headers: auth, body: JSON.stringify({ code: "000000" })
+    });
+    assert.strictEqual(bad.status, 400);
+
+    const enable = await fetch(`${baseUrl}/users/mfa/enable`, {
+        method: "POST", headers: auth,
+        body: JSON.stringify({ code: authenticator.generate(setup.secret) })
+    });
+    assert.strictEqual(enable.status, 200);
+    const { recoveryCodes } = await enable.json();
+    assert.strictEqual(recoveryCodes.length, 8);
+
+    // 1re étape : pas de session, seulement le jeton intermédiaire
+    const login2 = await fetch(`${baseUrl}/users/login`, {
+        method: "POST", headers: json, body: JSON.stringify({ email, password })
+    });
+    assert.strictEqual((await login2.json()).mfaRequired, true);
+    const pendingCookie = login2.headers.get("set-cookie") || "";
+    assert.doesNotMatch(pendingCookie, /jwt_token=/);
+    const pending = pendingCookie.split(";")[0];
+
+    // Le jeton intermédiaire placé dans jwt_token ne donne pas accès au profil
+    const forged = `jwt_token=${pending.split("=")[1]}`;
+    const profile = await fetch(`${baseUrl}/users/getprofile`, { headers: { cookie: forged } });
+    assert.strictEqual(profile.status, 401);
+
+    const wrong = await fetch(`${baseUrl}/users/login/mfa`, {
+        method: "POST", headers: { ...json, cookie: pending }, body: JSON.stringify({ code: "000000" })
+    });
+    assert.strictEqual(wrong.status, 400);
+
+    // 2e étape avec un code de secours (le code TOTP courant vient d'être utilisé)
+    const ok = await fetch(`${baseUrl}/users/login/mfa`, {
+        method: "POST", headers: { ...json, cookie: pending },
+        body: JSON.stringify({ recoveryCode: recoveryCodes[0] })
+    });
+    assert.strictEqual(ok.status, 200);
+    assert.match(ok.headers.get("set-cookie") || "", /jwt_token=/);
+});

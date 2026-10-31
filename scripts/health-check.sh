@@ -6,6 +6,9 @@
 #
 #   --backend-url  défaut http://127.0.0.1:5001/health
 #   --public-url   défaut http://127.0.0.1 (Nginx). Ex. http://<IP publique EC2>
+#                  Si HTTPS est activé (install.sh --domain), le défaut devient
+#                  https://<domaine> résolu vers 127.0.0.1 : l'accès HTTP par IP
+#                  est redirigé (301) et ne prouverait rien.
 #   --retries N    nombre de tentatives pour l'API (1 s d'intervalle, défaut 1)
 #   --backend-only ne vérifier que l'API directe
 #
@@ -30,10 +33,21 @@ while [[ $# -gt 0 ]]; do
 done
 [[ "$RETRIES" =~ ^[0-9]+$ && "$RETRIES" -ge 1 ]] || { echo "--retries invalide" >&2; exit 2; }
 
+# HTTPS activé par certbot : vérifier le vrai site (certificat compris) en local
+CURL_EXTRA=()
+NGINX_SITE=/etc/nginx/sites-available/landolsi
+if [[ "$PUBLIC_URL" == "http://127.0.0.1" && -r "$NGINX_SITE" ]] && grep -q "managed by Certbot" "$NGINX_SITE"; then
+    DOMAIN="$(awk '/server_name/ && $2 != "_;" { gsub(";", "", $2); print $2; exit }' "$NGINX_SITE")"
+    if [[ -n "$DOMAIN" ]]; then
+        PUBLIC_URL="https://${DOMAIN}"
+        CURL_EXTRA=(--resolve "${DOMAIN}:443:127.0.0.1")
+    fi
+fi
+
 status=0
 check() {
     local name="$1" url="$2" expect="$3" body
-    if body="$(curl -fsS --max-time 10 "$url" 2>&1)" && grep -q -- "$expect" <<<"$body"; then
+    if body="$(curl -fsS --max-time 10 "${CURL_EXTRA[@]}" "$url" 2>&1)" && grep -q -- "$expect" <<<"$body"; then
         echo "OK      $name ($url)"
     else
         echo "ÉCHEC   $name ($url) : ${body:0:200}"

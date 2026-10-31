@@ -137,6 +137,9 @@ if [[ ! -f "$APP_ENV_FILE" ]]; then
     set_env PORT 5001
     set_env TRUST_PROXY true
     set_env JWT_SECRET "$(openssl rand -hex 32)"
+    # Chiffrement des secrets de double authentification (fichier neuf
+    # uniquement : la changer rendrait illisibles les secrets déjà enrôlés)
+    set_env MFA_ENCRYPTION_KEY "$(openssl rand -hex 32)"
     set_env DB_SYNC none
     set_env UPLOAD_DIR /var/lib/landolsi/uploads
     if [[ -n "$DOMAIN" ]]; then

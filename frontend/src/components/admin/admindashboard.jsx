@@ -10,7 +10,9 @@ import {
     FaBars,
     FaTimes,
     FaTrademark,
-    FaComments
+    FaComments,
+    FaShieldAlt,
+    FaRobot
 } from "react-icons/fa";
 
 import {
@@ -366,6 +368,38 @@ function AdminDashboard() {
                         <span>
                             Réclamations
                         </span>
+                    </button>
+
+
+                    {/* ASSISTANT IA COMMERCIAL (MISTRAL) */}
+
+                    <button
+                        className="admin-menu-item"
+                        onClick={() => handleNavigation("/admin/assistant-ia")}
+                    >
+
+                        <FaRobot />
+
+                        <span>
+                            Assistant IA
+                        </span>
+
+                    </button>
+
+
+                    {/* SÉCURITÉ (DOUBLE AUTHENTIFICATION) */}
+
+                    <button
+                        className="admin-menu-item"
+                        onClick={() => handleNavigation("/admin/securite")}
+                    >
+
+                        <FaShieldAlt />
+
+                        <span>
+                            Sécurité (MFA)
+                        </span>
+
                     </button>
 
 

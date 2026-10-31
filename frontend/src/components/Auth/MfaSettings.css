@@ -1,0 +1,180 @@
+/* ========================================
+   DOUBLE AUTHENTIFICATION (MFA)
+   Styles autonomes : utilisés dans le profil client
+   et dans l'espace administrateur.
+======================================== */
+
+.mfa-section {
+    background: #ffffff;
+    padding: 25px;
+    margin-bottom: 20px;
+    border-radius: 14px;
+    box-shadow: 0 3px 15px rgba(0, 0, 0, 0.05);
+}
+
+.mfa-section .profile-section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    color: #c8102e;
+    font-size: 20px;
+}
+
+.mfa-section .profile-section-title h2 {
+    margin: 0;
+    color: #222222;
+    font-size: 19px;
+}
+
+.mfa-status {
+    color: #555;
+    line-height: 1.6;
+}
+
+.mfa-status-on {
+    color: #1e7e34;
+}
+
+.mfa-success,
+.mfa-error {
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.mfa-success {
+    background: #e8f5e9;
+    color: #1e7e34;
+}
+
+.mfa-error {
+    background: #fdecea;
+    color: #c8102e;
+}
+
+.mfa-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 420px;
+}
+
+.mfa-steps {
+    padding-left: 20px;
+    color: #555;
+    line-height: 1.7;
+    margin: 0;
+}
+
+.mfa-qr {
+    width: 200px;
+    height: 200px;
+    align-self: center;
+    border: 1px solid #eee;
+    border-radius: 8px;
+}
+
+.mfa-secret {
+    font-size: 13px;
+    color: #777;
+    text-align: center;
+    word-break: break-all;
+}
+
+.mfa-secret code {
+    font-size: 14px;
+    color: #222;
+    letter-spacing: 1px;
+}
+
+.mfa-input {
+    padding: 11px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.mfa-input-code {
+    text-align: center;
+    font-size: 22px;
+    letter-spacing: 6px;
+}
+
+.mfa-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.mfa-btn-primary,
+.mfa-btn-secondary,
+.mfa-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mfa-btn-primary {
+    background: #c8102e;
+    color: #fff;
+}
+
+.mfa-btn-secondary {
+    background: #eee;
+    color: #333;
+}
+
+.mfa-btn-danger {
+    background: #333;
+    color: #fff;
+}
+
+.mfa-btn-primary:disabled,
+.mfa-btn-danger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.mfa-recovery {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 10px;
+    padding: 18px;
+}
+
+.mfa-recovery-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    list-style: none;
+    padding: 0;
+    margin: 15px 0;
+    font-family: monospace;
+    font-size: 16px;
+}
+
+.mfa-recovery-list li {
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px 10px;
+    text-align: center;
+}
+
+@media (max-width: 576px) {
+    .mfa-section {
+        padding: 18px;
+    }
+
+    .mfa-recovery-list {
+        grid-template-columns: 1fr;
+    }
+}

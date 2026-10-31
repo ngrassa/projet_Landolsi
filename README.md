@@ -24,6 +24,7 @@ Application web responsive réalisée dans le cadre du projet de fin d'études (
 - [13. Parcours utilisateur](#13-parcours-utilisateur)
 - [14. Parcours administrateur](#14-parcours-administrateur)
 - [15. Chatbot et Telegram](#15-chatbot-et-telegram)
+- [15 bis. Assistants IA Mistral](#15-bis-assistants-ia-mistral)
 - [16. Vérifications et tests](#16-vérifications-et-tests)
 - [17. Problèmes fréquents](#17-problèmes-fréquents)
 - [18. Préparer la livraison finale](#18-préparer-la-livraison-finale)
@@ -88,15 +89,33 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 - Pas de limitation des tentatives de connexion ; dépendances anciennes (Express 4.16, `jade`).
 - Données de développement **importées le 30 octobre 2026** depuis le dump SQL `LANDOLSI_TIRES.sql` (PostgreSQL 17.10) : 12 utilisateurs, 8 marques, 9 pneus, 38 commandes, 10 factures, 13 avis. Lors de l'import : 385 contraintes `UNIQUE` en double (créées par les anciens `sync({ alter: true })`) ont été supprimées, les tables `avis_likes` et `reponses_avis` (absentes du code de ce dépôt) ont été conservées, et les colonnes `users.activite` et `users.identifiantEntreprise` (attendues par `UserModel.js`, absentes du dump) ont été ajoutées. Le compte administrateur est désormais celui du dump (mot de passe du poste de développement). Sauvegarde avant import : `/var/backups/landolsi/landolsi_tires_20261030T161213Z.dump` ; sauvegarde après import chiffrée, conservée hors dépôt ([§20](#sauvegarde-chiffrée-et-restauration-cicd)).
 
-### Déploiement AWS réalisé (30 octobre 2026)
+### Double authentification MFA (31 octobre 2026)
+
+Ajout d'une double authentification facultative par **application Authenticator** (TOTP, RFC 6238 : Google Authenticator, Microsoft Authenticator, FreeOTP, Authy...) pour les clients et les administrateurs. Détail : [§12 — Double authentification](#double-authentification-mfa).
+
+| Élément | Fichiers |
+|---|---|
+| Service TOTP, QR code, chiffrement AES-256-GCM du secret, codes de secours | `backend/services/mfaService.js` (paquets `otplib`, `qrcode`) |
+| Connexion en deux étapes, enrôlement, désactivation, réinitialisation admin | `backend/controllers/UserControllers.js`, `backend/routes/users.js` |
+| Refus du jeton intermédiaire comme session | `backend/middleware/requireAuth.js` |
+| Colonnes `mfaEnabled`, `mfaSecret`, `mfaTempSecret`, `mfaLastUsedStep`, `mfaRecoveryCodes` | `backend/models/UserModel.js`, migration `backend/migrations/20261031000000-add-user-mfa.js` |
+| Écran du code à la connexion, réglages MFA (profil client, menu admin « Sécurité (MFA) »), badge et réinitialisation dans la gestion des utilisateurs | `frontend/src/components/Auth/Login.jsx`, `MfaSettings.jsx`, `components/admin/AdminSecurite.jsx`, `AdminUtilisateurs.jsx`, `pages/Profile.jsx` |
+| Tests | `backend/test/mfa.test.js` (unitaires), `backend/test/api.test.js` (parcours complet) |
+
+### Assistants IA Mistral (31 octobre 2026)
+
+Trois assistants (conseiller pneus, service après-vente, analyse commerciale administrateur) reposant sur l'API Mistral avec appel d'outils métier : voir [§15 bis](#15-bis-assistants-ia-mistral). La clé `MISTRAL_API_KEY` reste exclusivement côté serveur ; au redéploiement, elle est injectée par `scripts/configure-ai.sh` (voir [§20](#redéploiement-complet-sur-aws-depuis-github-procédure-de-référence)).
+
+### Déploiement AWS réalisé (30 et 31 octobre 2026)
 
 | Élément | Valeur |
 |---|---|
-| URL publique | **https://landolsi-tires-18-213-152-8.sslip.io** (l'IP `18.213.152.8` redirige vers cette adresse) |
+| URL publique | **https://landolsi-tires-54-146-95-182.sslip.io** (l'IP `54.146.95.182` redirige vers cette adresse) |
 | Instance | EC2 `t3.small`, Ubuntu 24.04, `us-east-1`, provisionnée par Terraform, installée par cloud-init |
-| IP | IP élastique fixe `18.213.152.8` (conservée entre deux sessions du lab) |
+| IP | IP élastique `54.146.95.182` (redéploiement du 31/10 ; celle du 30/10, `18.213.152.8`, a été libérée par `terraform destroy`) |
 | HTTPS | Certificat Let's Encrypt, renouvellement automatique (`certbot.timer`) |
-| Contrôles | `/api/health` → `{"status":"ok","database":"up"}` ; connexion administrateur vérifiée |
+| Données | Sauvegarde finale du 30/10 restaurée : 12 utilisateurs, 9 pneus, 39 commandes, 11 factures, 36 images |
+| Contrôles | `/api/health` → `{"status":"ok","database":"up"}` ; assistants IA testés en production |
 
 Le 29 octobre, `ec2:RunInstances` était refusé sur le compte AWS Academy ; il est autorisé depuis le 30 octobre. Corrections intégrées à `scripts/install.sh` à la suite de ce déploiement : `--email` facultatif avec `--domain`, mise à jour de `COOKIE_SECURE`/`CORS_ORIGINS` lorsque HTTPS est activé après la première installation, redirection de l'accès par IP vers le nom de domaine (Certbot répondait 404).
 
@@ -111,6 +130,7 @@ Le modèle opérationnel retenu est le **retrait de la commande par le client ch
 ### Espace client
 
 - Inscription, connexion et gestion de session.
+- Double authentification facultative avec une application Authenticator (QR code, codes de secours).
 - Récupération de mot de passe par e-mail (si les paramètres SMTP sont configurés).
 - Consultation du catalogue et des fiches détaillées des pneus.
 - Recherche de pneus par critères disponibles dans l'interface : marque, dimension, saison et immatriculation/compatibilité véhicule.
@@ -119,7 +139,7 @@ Le modèle opérationnel retenu est le **retrait de la commande par le client ch
 - Création d'une commande et consultation de ses détails/statut.
 - Consultation des factures associées aux commandes, selon les actions disponibles dans l'interface.
 - Dépôt et consultation d'avis et de réclamations.
-- Utilisation du chatbot d'assistance.
+- Utilisation du chatbot d'assistance : conseiller IA pour choisir ses pneus (fiches, comparaison, ajout au panier) et assistant après-vente (suivi de commande, politiques publiées, brouillon de réclamation).
 
 ### Espace administrateur
 
@@ -128,7 +148,9 @@ Le modèle opérationnel retenu est le **retrait de la commande par le client ch
 - Gestion des marques.
 - Gestion des promotions.
 - Consultation et gestion des commandes et de leur statut.
-- Gestion des utilisateurs.
+- Gestion des utilisateurs (dont la réinitialisation de la double authentification d'un client).
+- Double authentification du compte administrateur (menu « Sécurité (MFA) »).
+- Assistant IA commercial (menu « Assistant IA ») : indicateurs, ventes, stock, réapprovisionnement, questions en langage naturel.
 - Gestion des réclamations et des avis selon les écrans disponibles.
 - Génération/gestion des factures selon le cycle de confirmation des commandes.
 
@@ -142,7 +164,7 @@ Les accès aux opérations administrateur doivent être protégés par les contr
 | Backend | Node.js, Express.js |
 | Base de données | PostgreSQL |
 | ORM | Sequelize |
-| Authentification | Cookies, JWT et bcrypt (selon les modules du backend) |
+| Authentification | Cookies, JWT et bcrypt (selon les modules du backend) ; MFA TOTP avec `otplib` et `qrcode` |
 | Images | Multer et répertoire public du backend |
 | E-mail | Nodemailer, avec compte SMTP configuré dans l'environnement |
 | Chatbot | Intégration Google Gemini via `@google/genai` |
@@ -279,6 +301,8 @@ Variables principales (liste complète et commentée dans `backend/.env.example`
 | `PORT`, `HOST` | Écoute du serveur | `5001`, toutes interfaces |
 | `CORS_ORIGINS` | Origines autorisées, séparées par des virgules | `http://localhost:5173,http://127.0.0.1:5173` |
 | `COOKIE_SECURE` | Cookie de session réservé à HTTPS | `false` (`true` en production) |
+| `MFA_ISSUER` | Nom affiché dans l'application Authenticator | `LANDOLSI TIRES` |
+| `MFA_ENCRYPTION_KEY` | Clé de chiffrement des secrets MFA en base (`openssl rand -hex 32`, générée par `install.sh` sur un fichier neuf). **Ne plus la modifier une fois des comptes enrôlés** | dérivée de `JWT_SECRET` |
 | `UPLOAD_DIR` | Répertoire des images téléversées | `backend/public/uploadPneu` |
 | `EMAIL_USER`, `EMAIL_PASS` | SMTP (récupération du mot de passe) | — |
 | `GEMINI_API_KEY` | Chatbot | — |
@@ -392,6 +416,34 @@ Les préfixes de routes sont montés dans `backend/app.js` :
 
 Les écritures du catalogue (`POST/PUT/DELETE` sur `/pneus`, `/marques`, `/compatibilites`) exigent une session administrateur. Le webhook `/telegram/webhook` est désactivé tant que `TELEGRAM_WEBHOOK_SECRET` n'est pas défini (l'application utilise le polling).
 
+### Double authentification (MFA)
+
+**Activation (client : page Profil ; administrateur : menu « Sécurité (MFA) ») :**
+
+1. « Activer la double authentification » → le serveur génère un secret TOTP et renvoie un QR code (`otpauth://totp/LANDOLSI TIRES:<email>?secret=...`).
+2. L'utilisateur le scanne avec Google Authenticator, Microsoft Authenticator, etc. (ou saisit la clé affichée).
+3. Il saisit le code à 6 chiffres affiché : la MFA n'est activée qu'après ce code correct.
+4. 8 **codes de secours** à usage unique sont affichés **une seule fois** (téléphone perdu).
+
+**Connexion :** après un mot de passe correct, un compte protégé ne reçoit pas de session mais un cookie `mfa_pending` valable 5 minutes ; `jwt_token` n'est créé qu'après un code TOTP ou un code de secours valide (5 essais au plus par tentative de connexion).
+
+| Méthode et chemin | Accès | Rôle |
+|---|---|---|
+| `POST /users/login` | public | Renvoie `mfaRequired: true` si la MFA est active |
+| `POST /users/login/mfa` | cookie `mfa_pending` | `{ code }` ou `{ recoveryCode }` → ouvre la session |
+| `GET /users/mfa/status` | connecté | État et nombre de codes de secours restants |
+| `POST /users/mfa/setup` | connecté | QR code et clé (secret en attente) |
+| `POST /users/mfa/enable` | connecté | `{ code }` → active et renvoie les codes de secours |
+| `POST /users/mfa/recovery-codes` | connecté | `{ code }` → nouveaux codes de secours (les anciens sont invalidés) |
+| `POST /users/mfa/disable` | connecté | `{ password, code }` ou `{ password, recoveryCode }` |
+| `PUT /users/admin/:id/mfa/reset` | administrateur | Supprime la MFA d'un utilisateur (après vérification de son identité) |
+
+**Sécurité :** secret chiffré en base (AES-256-GCM) ; codes de secours stockés sous forme d'empreinte SHA-256 ; tolérance de ±30 s pour l'horloge du téléphone ; un même code TOTP ne peut pas être réutilisé ; le jeton intermédiaire est refusé par `requireAuth`. Le compteur d'essais est en mémoire (une seule instance de l'API, cas actuel).
+
+**Téléphone perdu :** se connecter avec un code de secours puis réactiver la MFA ; sans code de secours, un administrateur réinitialise la MFA depuis « Utilisateurs ». Pour un administrateur sans code de secours, sur le serveur : `sudo -u postgres psql landolsi_tires -c "UPDATE users SET \"mfaEnabled\"=false, \"mfaSecret\"=NULL, \"mfaRecoveryCodes\"=NULL WHERE email='admin@...';"`.
+
+L'heure du serveur doit être juste (NTP, actif par défaut sur Ubuntu/EC2) : un décalage de plus de 30 s fait refuser les codes.
+
 Pour documenter chaque endpoint avec précision, consulter les fichiers correspondants dans `backend/routes/` et les contrôleurs dans `backend/controllers/`. Utilisez Postman ou Insomnia pour tester les requêtes protégées avec une session valide. Les routes protégées peuvent renvoyer `401` si l'utilisateur n'est pas connecté ou `403` si son rôle ne permet pas l'action.
 
 ## 13. Parcours utilisateur
@@ -432,6 +484,80 @@ Le démarrage du serveur appelle `demarrerTelegramPolling()` depuis le service T
 
 Ne mettez jamais le jeton du bot dans React, dans le README ou dans Git. Si un webhook est adopté ultérieurement, il faudra disposer d'une URL HTTPS publique et configurer le webhook côté Telegram; ne mélangez pas simultanément les modes sans vérifier la configuration.
 
+## 15 bis. Assistants IA Mistral
+
+Trois assistants s'appuient sur l'API Mistral (appel d'outils). **Le LLM ne fait que choisir une fonction métier et rédiger** : prix, stocks, compatibilités, indicateurs et droits d'accès sont calculés par le backend à partir de PostgreSQL. Aucun SQL ni code n'est généré par le modèle ; ses arguments sont validés contre un schéma strict.
+
+| Assistant | Route | Accès | Interface |
+|---|---|---|---|
+| Conseiller pneus | `POST /ai/tire-advisor/chat` | public | widget, onglet « Conseiller pneus » |
+| Service après-vente | `POST /ai/support/chat` | public ; commandes si connecté | widget, onglet « Service après-vente » |
+| Analyse commerciale | `POST /ai/admin/analytics/chat` | `requireAdmin` | `/admin/assistant-ia` |
+| Indicateurs (sans LLM) | `GET /ai/admin/analytics/kpis` | `requireAdmin` | `/admin/assistant-ia` |
+
+Corps des requêtes de chat : `{ "message": "...", "history": [{ "role": "user"|"assistant", "content": "..." }] }` (1 000 caractères max, 12 messages d'historique max ; les rôles `system`/`tool` envoyés par le navigateur sont ignorés).
+
+### Architecture
+
+```
+backend/services/ai/
+  mistralClient.js    client unique : clé serveur, délai, nouvelle tentative 429/5xx
+  agent.js            boucle LLM <-> outils, tours bornés, validation des arguments
+  repository.js       requêtes Sequelize paramétrées (seul accès aux données)
+  tireTools.js        search_tires, get_tire_details, compare_tires, check_vehicle_compatibility, list_catalog_options
+  analyticsTools.js   sales_summary, top_products, sales_by_brand_and_season, stock_alerts, restock_suggestions, margin_analysis, conversion_analysis
+  supportTools.js     search_support_docs (RAG lexical), get_my_orders, get_order_status, prepare_support_ticket
+backend/data/support-docs/   documents officiels cités par l'assistant SAV
+backend/controllers/AiController.js, backend/routes/aiRoutes.js
+backend/middleware/rateLimit.js, optionalAuth.js
+frontend/src/components/chatbot/Chatbot.jsx       widget (2 onglets, fiches, comparaison, panier, brouillon de réclamation)
+frontend/src/components/admin/AdminAssistantIA.jsx tableau de bord + chat admin
+frontend/src/components/ai/MarkdownLite.jsx        rendu Markdown sans innerHTML
+frontend/src/services/aiApi.js
+```
+
+### Configuration
+
+Dans `backend/.env` (ou `/etc/landolsi/backend.env` en production) :
+
+```bash
+MISTRAL_API_KEY=...            # jamais dans le frontend ni dans Git
+MISTRAL_MODEL=ministral-14b-latest   # défaut si absent
+MISTRAL_TIMEOUT_MS=30000
+AI_MAX_TOOL_ROUNDS=5
+AI_RATE_LIMIT_PER_MINUTE=15
+```
+
+Le modèle doit supporter l'appel d'outils **et** être ouvert sur votre abonnement : certaines offres ont un quota nul (HTTP 429 permanent) sur `mistral-small-latest` / `mistral-medium-latest`. Vérification rapide :
+
+```bash
+curl -s -H "Authorization: Bearer $MISTRAL_API_KEY" https://api.mistral.ai/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"ministral-14b-latest","messages":[{"role":"user","content":"ok"}],"max_tokens":5}'
+```
+
+Sans clé (ou avec les valeurs d'exemple `replace_with_...` de `.env.example`), les routes IA répondent 503 et le reste du site fonctionne. Aucune migration n'est nécessaire. En production, utiliser `scripts/configure-ai.sh` (clé lue sur l'entrée standard).
+
+### Règles métier et garde-fous
+
+- **Produits** : le modèle cite les pneus sous la forme `[#ID]` ; seules les références renvoyées par un outil pendant la requête deviennent des fiches (prix, promotion, stock réels). Un identifiant inventé est retiré et un avertissement s'affiche.
+- **Compatibilité** : « Compatible » uniquement si l'immatriculation existe en base avec des pneus associés (`vehicule_pneus`). Sinon : « même dimension, à vérifier » ou « non vérifiée ».
+- **Chiffre d'affaires** : prix payé × quantité des commandes `confirmée`, `en préparation`, `expédiée`, `livrée`. Les commandes `en attente` sont comptées à part (CA potentiel), les `annulée` sont exclues. Les remboursements ne sont pas enregistrés par le site. Panier moyen = CA / commandes validées.
+- **Marges / conversions** : non calculées (aucun coût d'achat ni suivi des consultations). L'assistant l'explique.
+- **Réapprovisionnement** : rythme moyen observé × jours de couverture − stock ; simple recommandation, aucune commande fournisseur.
+- **SAV** : une commande n'est lue que si elle appartient au client connecté (`where: { id, userId }`). L'assistant prépare un **brouillon** de réclamation ; c'est le client qui l'envoie (route existante `POST /reclamations`). Aucun remboursement, retour ou changement de statut n'est jamais effectué par l'IA.
+- **Politiques** : l'assistant ne répond qu'à partir de `backend/data/support-docs/`. Le site ne publie aujourd'hui **aucune politique de retour, garantie, livraison ou montage** : ajoutez les textes officiels (format décrit dans `LISEZMOI.md` du dossier) puis redémarrez le backend.
+- **Données personnelles** : aucun nom, e-mail, téléphone ni adresse n'est envoyé à Mistral ; les conversations ne sont pas stockées côté serveur ni journalisées.
+- **Coûts** : 15 requêtes/min/IP, 5 tours d'outils max, 900 jetons max par réponse, délai de 30 s.
+
+### Tests
+
+```bash
+cd backend
+node --test test/ai.test.js        # tests des assistants, Mistral et base simulés, sans crédit
+node test/ai.live.js               # test réel (consomme quelques crédits), données simulées
+```
+
 ## 16. Vérifications et tests
 
 ### Vérification de base
@@ -443,6 +569,7 @@ Ne mettez jamais le jeton du bot dans React, dans le README ou dans Git. Si un w
 - [ ] Le frontend démarre sur le port `5173`.
 - [ ] Le catalogue s'affiche et les images de pneus sont accessibles.
 - [ ] L'inscription et la connexion fonctionnent.
+- [ ] La double authentification s'active (QR code scanné), est demandée à la connexion et accepte un code de secours.
 - [ ] Les routes protégées refusent l'accès non autorisé.
 - [ ] Le panier et la création de commande fonctionnent.
 - [ ] L'administrateur peut traiter une commande et le cycle de facture est vérifié.
@@ -559,6 +686,7 @@ Pistes restantes :
 
 - ajouter des tests frontend et corriger les 17 erreurs de lint React;
 - limiter les tentatives de connexion et de réinitialisation de mot de passe (`express-rate-limit`);
+- rendre la double authentification obligatoire pour les comptes administrateurs;
 - externaliser les images dans un stockage objet (S3 ou équivalent) pour permettre plusieurs instances;
 - ajouter une surveillance de disponibilité externe et la copie automatique des sauvegardes hors de l'instance;
 - mettre à jour les dépendances anciennes du backend (Express 4.16, `jade`);
@@ -595,7 +723,8 @@ terraform output ssh_command
 ssh -i ~/.ssh/labsuser.pem ubuntu@<IP>
 sudo git clone https://github.com/ngrassa/projet_Landolsi.git /opt/landolsi-src
 sudo /opt/landolsi-src/scripts/install.sh
-sudo nano /etc/landolsi/backend.env              # SMTP, Gemini, Telegram, ADMIN_* (nouveaux secrets)
+sudo nano /etc/landolsi/backend.env              # SMTP, Telegram, ADMIN_* (nouveaux secrets)
+# Clé Mistral : scripts/configure-ai.sh (voir « Redéploiement complet » ci-dessous)
 sudo /opt/landolsi-src/scripts/deploy.sh --source /opt/landolsi-src
 
 # 3. Compte administrateur (base neuve uniquement)
@@ -615,6 +744,83 @@ Ouvrir ensuite `http://<IP>/`.
 Avec `git_repo_url = "https://github.com/ngrassa/projet_Landolsi.git"` dans `terraform.tfvars`, cloud-init exécute automatiquement l'étape 2 (environ 2 minutes, journal : `/var/log/cloud-init-output.log`).
 
 Sans Terraform, créer l'instance dans la console (Ubuntu 24.04, SSH limité à votre IP, HTTP ouvert, IMDSv2) puis reprendre à l'étape 2.
+
+### Redéploiement complet sur AWS depuis GitHub (procédure de référence)
+
+Procédure à suivre à chaque nouvelle session du lab (ou après `terraform destroy`). Elle part de ce dépôt public : cloud-init clone la branche `master`, installe et déploie automatiquement le code, **assistants IA compris**. Les seuls éléments qui ne sont pas dans Git, par sécurité, sont fournis aux étapes 5 et 6 : la clé Mistral et les données.
+
+**Pré-requis sur le poste d'administration :** Terraform ≥ 1.5, AWS CLI, la clé SSH `~/.ssh/landolsi_ec2_ed25519`, la clé Mistral dans `backend/.env` (`MISTRAL_API_KEY=...`), les sauvegardes chiffrées et leur phrase secrète (voir [`lisezmoi.txt`](lisezmoi.txt)).
+
+```bash
+# 1. Identifiants du lab : AWS Academy > AWS Details > AWS CLI, à copier dans ~/.aws/credentials
+aws sts get-caller-identity                        # doit afficher le compte du lab
+
+# 2. Vérifier terraform.tfvars (infra/aws/, jamais versionné)
+cd infra/aws
+grep -E 'security_group_id|ssh_allowed_cidr|git_repo_url|allocate_eip' terraform.tfvars
+#   git_repo_url      = "https://github.com/ngrassa/projet_Landolsi.git"
+#   allocate_eip      = true
+#   ssh_allowed_cidr  = "<votre IP>/32"     -> curl -s https://checkip.amazonaws.com
+aws ec2 describe-security-groups --group-ids <sg-...>     # le groupe existe-t-il encore ?
+#   S'il a disparu (réinitialisation du lab) : le recréer (docs/deployment/aws-academy-deployment.md §2),
+#   puis : terraform state rm aws_vpc_security_group_ingress_rule.ssh aws_vpc_security_group_ingress_rule.http 'aws_vpc_security_group_ingress_rule.https[0]'
+
+# 3. Provisionner
+terraform init
+terraform plan -out tfplan                         # relire : uniquement des créations
+terraform apply tfplan
+terraform output                                   # public_ip, sslip_domain, https_setup_command
+IP=$(terraform output -raw public_ip)
+
+# 4. Attendre la fin de cloud-init (2 à 3 minutes) puis activer HTTPS
+until curl -fs http://$IP/api/health; do sleep 10; done; echo
+eval "$(terraform output -raw https_setup_command)"     # install.sh --domain landolsi-tires-<ip>.sslip.io
+cd ../..
+
+# 5. Clé Mistral : lue sur l'entrée standard (absente de Terraform, de Git et de la ligne de commande)
+grep '^MISTRAL_API_KEY=' backend/.env | cut -d= -f2- | \
+  ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@$IP 'sudo /opt/landolsi-src/scripts/configure-ai.sh'
+#   -> "Assistant IA opérationnel (test SAV : HTTP 200)". Autre modèle : configure-ai.sh --model <nom>
+
+# 6. Données : restaurer la dernière sauvegarde chiffrée (base neuve = vide, sans compte admin)
+B=~/.local/share/landolsi/backups; P=~/.config/landolsi/db-backup.passphrase
+gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/landolsi.dump -d $B/<sauvegarde>.dump.gpg
+gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/uploads.tar.gz -d $B/<images>.tar.gz.gpg
+scp -i ~/.ssh/landolsi_ec2_ed25519 /tmp/landolsi.dump /tmp/uploads.tar.gz ubuntu@$IP:/tmp/
+ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@$IP '
+  sudo chmod 644 /tmp/landolsi.dump
+  sudo /opt/landolsi/current/scripts/restore-db.sh --file /tmp/landolsi.dump \
+       --target-db landolsi_tires --env-file /etc/landolsi/backend.env --allow-nonempty
+  T=$(mktemp -d); sudo tar xzf /tmp/uploads.tar.gz -C $T
+  sudo rsync -a $T/uploads/ /var/lib/landolsi/uploads/; sudo chown -R landolsi:landolsi /var/lib/landolsi/uploads
+  sudo /opt/landolsi-src/scripts/deploy.sh --source /opt/landolsi-src   # réapplique les migrations récentes
+  sudo rm -rf $T /tmp/landolsi.dump /tmp/uploads.tar.gz'
+rm -f /tmp/landolsi.dump /tmp/uploads.tar.gz
+
+# 7. Vérifier
+ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@$IP 'sudo /opt/landolsi/current/scripts/health-check.sh'
+cd infra/aws && echo "https://$(terraform output -raw sslip_domain)/"
+```
+
+Sans données à restaurer (étape 6 sautée), créer le compte administrateur : voir « Compte administrateur sans écrire le mot de passe sur le disque » ci-dessous.
+
+**Mettre à jour le serveur après un `git push`** (sans recréer l'instance) :
+
+```bash
+ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@<IP> \
+  'cd /opt/landolsi-src && sudo git pull --ff-only && sudo scripts/deploy.sh --source /opt/landolsi-src'
+```
+
+La clé Mistral, le HTTPS et les données sont conservés : ils sont stockés sur le serveur, hors du répertoire de code.
+
+**Fin de session :** sauvegarder d'abord (`sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh`, puis rapatrier et chiffrer l'archive comme décrit dans `lisezmoi.txt`), puis `terraform destroy` si l'instance ne doit pas être conservée. L'IP élastique est alors libérée : au prochain déploiement, l'IP et le nom sslip.io changent.
+
+**Points de vigilance**
+
+- `health-check.sh` vérifie le site en `https://<domaine>` (résolu vers `127.0.0.1`) dès que Certbot est actif. L'ancien contrôle par `http://127.0.0.1` recevait un 301 et faisait annuler chaque déploiement.
+- Relancer `install.sh` **sans** `--domain` remet Nginx en HTTP : passer toujours `--domain` une fois HTTPS activé.
+- Les identifiants AWS Academy expirent à la fin de la session du lab : les recopier avant toute commande Terraform.
+- Sur certaines offres Mistral, `mistral-small-latest` et `mistral-medium-latest` ont un quota nul (HTTP 429 permanent) ; le défaut `ministral-14b-latest` est utilisable.
 
 ### IP fixe et HTTPS
 
@@ -661,7 +867,9 @@ La base de production du 30 octobre 2026 est sauvegardée **chiffrée** (GPG AES
 | État des services | `systemctl status landolsi-backend nginx postgresql` |
 | Journaux API | `journalctl -u landolsi-backend -f` |
 | Santé | `/opt/landolsi/current/scripts/health-check.sh` |
-| Mise à jour | `cd /opt/landolsi-src && sudo git pull && sudo scripts/deploy.sh --source /opt/landolsi-src` |
+| Mise à jour | `cd /opt/landolsi-src && sudo git pull --ff-only && sudo scripts/deploy.sh --source /opt/landolsi-src` |
+| Clé / modèle Mistral | `… \| sudo /opt/landolsi-src/scripts/configure-ai.sh [--model <nom>]` (clé sur l'entrée standard) |
+| Journaux des assistants IA | `journalctl -u landolsi-backend \| grep -E 'Assistant\|Mistral\|Outil IA'` |
 | Retour arrière | `sudo /opt/landolsi/current/scripts/rollback.sh` |
 | Sauvegarde manuelle | `sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh` |
 | Restauration (nouvelle base) | `scripts/restore-db.sh --file <archive.dump> --target-db <base>` |

@@ -9,6 +9,8 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
+import MfaSettings from "../components/Auth/MfaSettings";
+
 
 import {
     FaUser,
@@ -1062,6 +1064,13 @@ function Profile() {
 
 
                 </form>
+
+
+                {/* ========================================
+                    DOUBLE AUTHENTIFICATION
+                ======================================== */}
+
+                {!isEditing && <MfaSettings />}
 
 
                 {/* ========================================

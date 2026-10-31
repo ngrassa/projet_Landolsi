@@ -27,6 +27,10 @@ const toInt = (value, defaultValue) => {
     return Number.isNaN(n) ? defaultValue : n;
 };
 
+// Valeurs d'exemple de .env.example (« replace_with_... ») = non configuré
+const unlessPlaceholder = (value) =>
+    value && !/^replace_with/i.test(String(value).trim()) ? String(value).trim() : undefined;
+
 // Ancien secret codé en dur : conservé uniquement pour le développement
 // local afin de ne pas casser les sessions existantes.
 const DEV_JWT_SECRET = "net pneus secret";
@@ -47,6 +51,10 @@ const config = {
     jwtSecret: env.JWT_SECRET || (isProduction ? undefined : DEV_JWT_SECRET),
     cookieSecure: toBool(env.COOKIE_SECURE, isProduction),
 
+    // Double authentification (application Authenticator)
+    mfaIssuer: env.MFA_ISSUER || "LANDOLSI TIRES",
+    mfaEncryptionKey: env.MFA_ENCRYPTION_KEY || undefined,
+
     db: {
         name: env.DB_NAME,
         user: env.DB_USER,
@@ -66,7 +74,19 @@ const config = {
         env.UPLOAD_DIR || path.join(__dirname, "..", "public", "uploadPneu")
     ),
 
-    telegramPollingEnabled: toBool(env.TELEGRAM_POLLING_ENABLED, true)
+    telegramPollingEnabled: toBool(env.TELEGRAM_POLLING_ENABLED, true),
+
+    // Assistants IA (Mistral) : clé exclusivement côté serveur
+    mistral: {
+        apiKey: unlessPlaceholder(env.MISTRAL_API_KEY),
+        // Disponible même sur les offres où mistral-small/medium ont un quota nul
+        model: unlessPlaceholder(env.MISTRAL_MODEL) || "ministral-14b-latest",
+        baseUrl: (env.MISTRAL_BASE_URL || "https://api.mistral.ai/v1").replace(/\/+$/, ""),
+        timeoutMs: toInt(env.MISTRAL_TIMEOUT_MS, 30000),
+        maxToolRounds: toInt(env.AI_MAX_TOOL_ROUNDS, 5),
+        // Requêtes IA autorisées par IP et par minute
+        rateLimitPerMinute: toInt(env.AI_RATE_LIMIT_PER_MINUTE, 15)
+    }
 };
 
 // =====================================================
@@ -91,6 +111,10 @@ function validateConfig() {
             errors.push("JWT_SECRET doit être un secret aléatoire d'au moins 32 caractères");
         }
 
+        if (env.MFA_ENCRYPTION_KEY && env.MFA_ENCRYPTION_KEY.length < 32) {
+            errors.push("MFA_ENCRYPTION_KEY doit contenir au moins 32 caractères");
+        }
+
         if (config.db.sync === "alter") {
             errors.push("DB_SYNC=alter est interdit en production; utilisez les migrations");
         }
@@ -106,6 +130,10 @@ function validateConfig() {
 
     if (!isProduction && !env.JWT_SECRET) {
         console.warn("⚠️ JWT_SECRET absent : secret de développement utilisé.");
+    }
+
+    if (!config.mistral.apiKey) {
+        console.warn("ℹ️ MISTRAL_API_KEY absent : assistants IA désactivés (réponse 503).");
     }
 
     if (isProduction && !config.cookieSecure) {

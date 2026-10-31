@@ -70,3 +70,16 @@ test("CORS_ORIGINS accepte une liste séparée par des virgules", () => {
     const r = validate({ CORS_ORIGINS: "https://a.example, https://b.example" });
     assert.deepStrictEqual(r.config.corsOrigins, ["https://a.example", "https://b.example"]);
 });
+
+test("Mistral : valeurs d'exemple de .env.example traitées comme absentes", () => {
+    const r = validate({
+        MISTRAL_API_KEY: "replace_with_your_mistral_api_key",
+        MISTRAL_MODEL: "replace_with_an_available_model"
+    });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.config.mistral.apiKey, undefined);
+    assert.strictEqual(r.config.mistral.model, "ministral-14b-latest");
+    const r2 = validate({ MISTRAL_API_KEY: "k-reelle", MISTRAL_MODEL: "mistral-small-latest" });
+    assert.strictEqual(r2.config.mistral.apiKey, "k-reelle");
+    assert.strictEqual(r2.config.mistral.model, "mistral-small-latest");
+});

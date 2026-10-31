@@ -11,7 +11,8 @@ import {
 } from "react";
 
 import {
-    login
+    login,
+    loginMfa
 } from "../../services/apiuser";
 
 
@@ -37,6 +38,17 @@ function Login() {
     // ==============================
 
     const [error, setError] = useState("");
+
+
+    // ==============================
+    // DOUBLE AUTHENTIFICATION
+    // ==============================
+
+    const [mfaStep, setMfaStep] = useState(false);
+
+    const [mfaCode, setMfaCode] = useState("");
+
+    const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
 
     // ==============================
@@ -83,42 +95,20 @@ function Login() {
             const response = await login(formData);
 
 
-            console.log(
-                "✅ Connexion réussie :",
-                response.data
-            );
-
-
             // ========================================
-            // INFORMER LA NAVBAR
+            // COMPTE PROTÉGÉ PAR LA DOUBLE AUTHENTIFICATION
             // ========================================
 
-            window.dispatchEvent(
-                new Event("authChanged")
-            );
+            if (response.data.mfaRequired) {
 
+                setMfaStep(true);
 
-            // ========================================
-            // MESSAGE
-            // ========================================
-
-            alert("Connexion réussie");
-
-
-            // ========================================
-            // REDIRECTION SELON LE RÔLE
-            // ========================================
-
-            if (response.data.user.role === "admin") {
-
-                navigate("/admin");
-
-            } else {
-
-                navigate("/profile");
+                return;
 
             }
 
+
+            finishLogin(response.data.user);
 
         }
 
@@ -156,8 +146,252 @@ function Login() {
 
 
     // ==============================
+    // 2E ÉTAPE : CODE AUTHENTICATOR
+    // ==============================
+
+    const handleMfaSubmit = async (e) => {
+
+        e.preventDefault();
+
+        try {
+
+            const response = await loginMfa(
+
+                useRecoveryCode
+                    ? { recoveryCode: mfaCode }
+                    : { code: mfaCode }
+
+            );
+
+            if (useRecoveryCode) {
+
+                alert(
+                    `Code de secours utilisé. Il vous en reste ${response.data.recoveryCodesLeft}.`
+                );
+
+            }
+
+            finishLogin(response.data.user);
+
+        }
+
+        catch (error) {
+
+            setMfaCode("");
+
+            // Jeton intermédiaire expiré ou trop de tentatives
+            if ([401, 429].includes(error.response?.status)) {
+
+                setMfaStep(false);
+
+                setFormData({ ...formData, password: "" });
+
+            }
+
+            setError(
+
+                error.response?.data?.message ||
+
+                "Code de vérification incorrect"
+
+            );
+
+        }
+
+    };
+
+
+    const handleBackToLogin = () => {
+
+        setMfaStep(false);
+
+        setMfaCode("");
+
+        setUseRecoveryCode(false);
+
+        setError("");
+
+    };
+
+
+    // ==============================
+    // CONNEXION TERMINÉE
+    // ==============================
+
+    const finishLogin = (user) => {
+
+        console.log(
+            "✅ Connexion réussie :",
+            user
+        );
+
+
+        // ========================================
+        // INFORMER LA NAVBAR
+        // ========================================
+
+        window.dispatchEvent(
+            new Event("authChanged")
+        );
+
+
+        // ========================================
+        // MESSAGE
+        // ========================================
+
+        alert("Connexion réussie");
+
+
+        // ========================================
+        // REDIRECTION SELON LE RÔLE
+        // ========================================
+
+        if (user.role === "admin") {
+
+            navigate("/admin");
+
+        } else {
+
+            navigate("/profile");
+
+        }
+
+    };
+
+
+    // ==============================
     // AFFICHAGE
     // ==============================
+
+    if (mfaStep) {
+
+        return (
+
+            <div className="auth-container">
+
+
+                <div className="auth-card">
+
+
+                    <h2>
+                        Vérification en deux étapes
+                    </h2>
+
+
+                    <p className="mfa-help">
+
+                        {useRecoveryCode
+                            ? "Saisissez l'un de vos codes de secours (usage unique)."
+                            : "Ouvrez votre application d'authentification (Google Authenticator, Microsoft Authenticator...) et saisissez le code à 6 chiffres affiché pour LANDOLSI TIRES."
+                        }
+
+                    </p>
+
+
+                    <form onSubmit={handleMfaSubmit}>
+
+
+                        <input
+
+                            type="text"
+
+                            name="mfaCode"
+
+                            className="mfa-code-input"
+
+                            placeholder={useRecoveryCode ? "XXXXX-XXXXX" : "123456"}
+
+                            inputMode={useRecoveryCode ? "text" : "numeric"}
+
+                            autoComplete="one-time-code"
+
+                            maxLength={useRecoveryCode ? 11 : 6}
+
+                            value={mfaCode}
+
+                            onChange={(e) => {
+                                setMfaCode(e.target.value);
+                                setError("");
+                            }}
+
+                            autoFocus
+
+                            required
+
+                        />
+
+
+                        {error && (
+
+                            <p className="error">
+
+                                {error}
+
+                            </p>
+
+                        )}
+
+
+                        <button
+
+                            type="submit"
+
+                            className="submit-btn"
+
+                        >
+
+                            Vérifier
+
+                        </button>
+
+
+                    </form>
+
+
+                    <div className="auth-links">
+
+
+                        <button
+                            type="button"
+                            className="mfa-link-btn"
+                            onClick={() => {
+                                setUseRecoveryCode(!useRecoveryCode);
+                                setMfaCode("");
+                                setError("");
+                            }}
+                        >
+
+                            {useRecoveryCode
+                                ? "Utiliser l'application d'authentification"
+                                : "Téléphone indisponible ? Utiliser un code de secours"
+                            }
+
+                        </button>
+
+
+                        <button
+                            type="button"
+                            className="mfa-link-btn"
+                            onClick={handleBackToLogin}
+                        >
+
+                            Retour à la connexion
+
+                        </button>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+        );
+
+    }
+
 
     return (
 

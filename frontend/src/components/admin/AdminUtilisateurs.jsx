@@ -5,13 +5,15 @@ import {
     FaTrash,
     FaHome,
     FaUserCheck,
-    FaUserTimes
+    FaUserTimes,
+    FaShieldAlt
 } from "react-icons/fa";
 
 import {
     getAllUsers,
     toggleUserStatus,
-    deleteUser
+    deleteUser,
+    resetUserMfa
 } from "../../services/apiuser";
 
 import "./AdminUtilisateurs.css";
@@ -104,6 +106,53 @@ function AdminUtilisateurs() {
             alert(
                 error.response?.data?.message ||
                 "Impossible de modifier le statut de l'utilisateur."
+            );
+
+        }
+
+    };
+
+
+    // ========================================
+    // RÉINITIALISER LA DOUBLE AUTHENTIFICATION
+    // (client ayant perdu son téléphone et ses codes de secours)
+    // ========================================
+
+    const handleResetMfa = async (id) => {
+
+        const confirmation = window.confirm(
+            "Réinitialiser la double authentification de cet utilisateur ? " +
+            "Vérifiez d'abord son identité : il pourra ensuite se connecter avec son seul mot de passe."
+        );
+
+        if (!confirmation) {
+            return;
+        }
+
+        try {
+
+            await resetUserMfa(id);
+
+            setUsers((usersActuels) =>
+                usersActuels.map((user) =>
+                    user.id === id
+                        ? { ...user, mfaEnabled: false }
+                        : user
+                )
+            );
+
+            alert("Double authentification réinitialisée.");
+
+        } catch (error) {
+
+            console.error(
+                "❌ Erreur réinitialisation MFA :",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Impossible de réinitialiser la double authentification."
             );
 
         }
@@ -430,6 +479,20 @@ function AdminUtilisateurs() {
 
                                 </span>
 
+
+                                {user.mfaEnabled && (
+
+                                    <span
+                                        className="status-active"
+                                        title="Double authentification activée"
+                                    >
+
+                                        <FaShieldAlt /> MFA
+
+                                    </span>
+
+                                )}
+
                             </div>
 
 
@@ -472,6 +535,29 @@ function AdminUtilisateurs() {
                                         </span>
 
                                     </button>
+
+
+                                    {/* RÉINITIALISER LA MFA */}
+
+                                    {user.mfaEnabled && (
+
+                                        <button
+                                            className="btn-activer"
+                                            title="Réinitialiser la double authentification"
+                                            onClick={() =>
+                                                handleResetMfa(user.id)
+                                            }
+                                        >
+
+                                            <FaShieldAlt />
+
+                                            <span>
+                                                Réinit. MFA
+                                            </span>
+
+                                        </button>
+
+                                    )}
 
 
                                     {/* SUPPRIMER */}

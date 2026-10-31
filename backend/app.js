@@ -37,6 +37,7 @@ const chatbotRoutes = require("./routes/chatbotRoutes");
 const factureRoutes = require("./routes/FactureRoutes");
 const avisRoutes = require("./routes/AvisRoutes");
 const reclamationRouter = require("./routes/reclamationRoutes");
+const createAiRouter = require("./routes/aiRoutes");
 
 
 
@@ -117,6 +118,8 @@ app.use("/factures", factureRoutes);
 app.use("/avis", avisRoutes);
 app.use("/reclamations", reclamationRouter);
 app.use("/telegram", telegramRoutes);
+// Assistants IA Mistral (conseiller pneus, SAV, analyse commerciale)
+app.use("/ai", createAiRouter());
 
 
 // =====================================================

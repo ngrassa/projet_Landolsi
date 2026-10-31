@@ -120,6 +120,37 @@ resetPasswordExpires: {
     isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true
+    },
+
+    // Double authentification (TOTP, application Authenticator)
+    mfaEnabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+    },
+
+    // Secret chiffré (AES-256-GCM), voir services/mfaService.js
+    mfaSecret: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+
+    // Secret en attente de confirmation pendant l'enrôlement
+    mfaTempSecret: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+
+    // Dernière période TOTP acceptée (refus de la réutilisation d'un code)
+    mfaLastUsedStep: {
+        type: DataTypes.BIGINT,
+        allowNull: true
+    },
+
+    // Empreintes SHA-256 des codes de secours restants
+    mfaRecoveryCodes: {
+        type: DataTypes.JSONB,
+        allowNull: true
     }
 
 },

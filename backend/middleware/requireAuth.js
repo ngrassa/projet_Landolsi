@@ -32,8 +32,10 @@ const requireAuth = (req, res, next) => {
         (err, decodedToken) => {
 
 
-            // Token invalide ou expiré
-            if (err) {
+            // Token invalide ou expiré, ou jeton intermédiaire de
+            // double authentification (mot de passe vérifié, code TOTP
+            // pas encore saisi) : il ne donne accès à rien d'autre.
+            if (err || decodedToken.purpose) {
 
                 return res.status(401).json({
 

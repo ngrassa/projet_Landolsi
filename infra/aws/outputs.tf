@@ -24,3 +24,13 @@ output "ssh_command" {
   description = "AWS Academy : téléchargez labsuser.pem depuis 'AWS Details'"
   value       = "ssh -i ~/.ssh/labsuser.pem ubuntu@${local.public_ip}"
 }
+
+output "sslip_domain" {
+  description = "Nom de domaine gratuit pointant vers l'IP publique (HTTPS : install.sh --domain)"
+  value       = "landolsi-tires-${replace(local.public_ip, ".", "-")}.sslip.io"
+}
+
+output "https_setup_command" {
+  description = "À lancer une fois cloud-init terminé pour activer HTTPS (Let's Encrypt)"
+  value       = "ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@${local.public_ip} 'sudo /opt/landolsi-src/scripts/install.sh --domain landolsi-tires-${replace(local.public_ip, ".", "-")}.sslip.io'"
+}

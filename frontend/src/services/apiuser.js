@@ -15,6 +15,14 @@ export const login = (user) => {
   });
 };
 
+// 2e étape de connexion : code de l'application Authenticator
+// (ou { recoveryCode } pour un code de secours)
+export const loginMfa = (payload) => {
+  return axios.post(`${apiURL}/login/mfa`, payload, {
+    withCredentials: true,
+  });
+};
+
 export const logout = () => {
   return axios.post(
     `${apiURL}/logout`,
@@ -99,6 +107,31 @@ export const resetPassword = (
 
 
 // ==============================
+// Double authentification (MFA)
+// ==============================
+
+export const getMfaStatus = () => {
+  return axios.get(`${apiURL}/mfa/status`, { withCredentials: true });
+};
+
+export const setupMfa = () => {
+  return axios.post(`${apiURL}/mfa/setup`, {}, { withCredentials: true });
+};
+
+export const enableMfa = (code) => {
+  return axios.post(`${apiURL}/mfa/enable`, { code }, { withCredentials: true });
+};
+
+export const disableMfa = (payload) => {
+  return axios.post(`${apiURL}/mfa/disable`, payload, { withCredentials: true });
+};
+
+export const regenerateRecoveryCodes = (code) => {
+  return axios.post(`${apiURL}/mfa/recovery-codes`, { code }, { withCredentials: true });
+};
+
+
+// ==============================
 // ADMIN — Gestion des utilisateurs
 // ==============================
 
@@ -127,4 +160,16 @@ export const deleteUser = (id) => {
   return axios.delete(`${apiURL}/admin/${id}`, {
     withCredentials: true,
   });
+};
+
+
+// Réinitialiser la double authentification d'un utilisateur
+export const resetUserMfa = (id) => {
+  return axios.put(
+    `${apiURL}/admin/${id}/mfa/reset`,
+    {},
+    {
+      withCredentials: true,
+    }
+  );
 };
