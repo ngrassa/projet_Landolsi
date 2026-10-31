@@ -127,9 +127,9 @@ Trois assistants (conseiller pneus, service après-vente, analyse commerciale ad
 |---|---|
 | URL publique | **https://landolsi-tires-54-146-95-182.sslip.io** (l'IP `54.146.95.182` redirige vers cette adresse) |
 | Instance | EC2 `t3.small`, Ubuntu 24.04, `us-east-1`, provisionnée par Terraform, installée par cloud-init |
-| IP | IP élastique `54.146.95.182` (redéploiement du 31/10 ; celle du 30/10, `18.213.152.8`, a été libérée par `terraform destroy`) |
+| IP | IP élastique `54.146.95.182` (`eipalloc-09a864995fee440c0`), réservée hors Terraform : **conservée entre les déploiements**, URL inchangée pour les clients |
 | HTTPS | Certificat Let's Encrypt, renouvellement automatique (`certbot.timer`) |
-| Données | Sauvegarde finale du 30/10 restaurée : 12 utilisateurs, 9 pneus, 39 commandes, 11 factures, 36 images |
+| Données | Sauvegarde du 30/10 restaurée, puis nouvelle sauvegarde chiffrée le 31/10 avant `terraform destroy` : 13 utilisateurs, 9 pneus, 41 commandes, 12 factures, 36 images |
 | Contrôles | `/api/health` → `{"status":"ok","database":"up"}` ; assistants IA testés en production |
 
 Le 29 octobre, `ec2:RunInstances` était refusé sur le compte AWS Academy ; il est autorisé depuis le 30 octobre. Corrections intégrées à `scripts/install.sh` à la suite de ce déploiement : `--email` facultatif avec `--domain`, mise à jour de `COOKIE_SECURE`/`CORS_ORIGINS` lorsque HTTPS est activé après la première installation, redirection de l'accès par IP vers le nom de domaine (Certbot répondait 404).
@@ -773,10 +773,12 @@ aws sts get-caller-identity                        # doit afficher le compte du 
 
 # 2. Vérifier terraform.tfvars (infra/aws/, jamais versionné)
 cd infra/aws
-grep -E 'security_group_id|ssh_allowed_cidr|git_repo_url|allocate_eip' terraform.tfvars
+grep -E 'security_group_id|ssh_allowed_cidr|git_repo_url|eip' terraform.tfvars
 #   git_repo_url      = "https://github.com/ngrassa/projet_Landolsi.git"
-#   allocate_eip      = true
+#   eip_allocation_id = "eipalloc-09a864995fee440c0"   # IP 54.146.95.182 conservée => même URL
+#   allocate_eip      = false
 #   ssh_allowed_cidr  = "<votre IP>/32"     -> curl -s https://checkip.amazonaws.com
+aws ec2 describe-addresses --allocation-ids eipalloc-09a864995fee440c0   # l'IP est-elle toujours réservée ?
 aws ec2 describe-security-groups --group-ids <sg-...>     # le groupe existe-t-il encore ?
 #   S'il a disparu (réinitialisation du lab) : le recréer (docs/deployment/aws-academy-deployment.md §2),
 #   puis : terraform state rm aws_vpc_security_group_ingress_rule.ssh aws_vpc_security_group_ingress_rule.http 'aws_vpc_security_group_ingress_rule.https[0]'
@@ -805,8 +807,10 @@ grep -E '^EMAIL_(USER|PASS)=' backend/.env | \
 
 # 6. Données : restaurer la dernière sauvegarde chiffrée (base neuve = vide, sans compte admin)
 B=~/.local/share/landolsi/backups; P=~/.config/landolsi/db-backup.passphrase
-gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/landolsi.dump -d $B/<sauvegarde>.dump.gpg
-gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/uploads.tar.gz -d $B/<images>.tar.gz.gpg
+# Sauvegarde la plus récente (31/10/2026, avant terraform destroy) : 41 commandes, 12 factures
+gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/landolsi.dump -d $B/landolsi_tires_20261031T105950Z.dump.gpg
+gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/uploads.tar.gz -d $B/uploads_20261031T105950Z.tar.gz.gpg
+sha256sum /tmp/landolsi.dump; cat $B/landolsi_tires_20261031T105950Z.dump.sha256.txt   # sommes identiques
 scp -i ~/.ssh/landolsi_ec2_ed25519 /tmp/landolsi.dump /tmp/uploads.tar.gz ubuntu@$IP:/tmp/
 ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@$IP '
   sudo chmod 644 /tmp/landolsi.dump
@@ -834,7 +838,9 @@ ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@<IP> \
 
 La clé Mistral, les identifiants SMTP, le HTTPS et les données sont conservés : ils sont stockés sur le serveur, hors du répertoire de code.
 
-**Fin de session :** sauvegarder d'abord (`sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh`, puis rapatrier et chiffrer l'archive comme décrit dans `lisezmoi.txt`), puis `terraform destroy` si l'instance ne doit pas être conservée. L'IP élastique est alors libérée : au prochain déploiement, l'IP et le nom sslip.io changent.
+**Fin de session :** sauvegarder d'abord (`sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh`, puis rapatrier et chiffrer l'archive comme décrit dans `lisezmoi.txt`), puis `terraform destroy` si l'instance ne doit pas être conservée.
+
+**Même URL à chaque redéploiement :** l'IP élastique `54.146.95.182` (`eipalloc-09a864995fee440c0`) est réservée **en dehors de Terraform** et seulement *associée* à l'instance (`eip_allocation_id`). `terraform destroy` supprime l'instance et l'association mais **conserve l'IP** : le site revient à l'adresse **https://landolsi-tires-54-146-95-182.sslip.io** après `terraform apply` et l'étape 4 (nouveau certificat pour le même nom). Coût d'une IP réservée non associée : environ 0,005 $/h (≈ 3,6 $/mois) sur le budget du lab. Elle disparaît seulement si on la libère (`aws ec2 release-address --allocation-id eipalloc-09a864995fee440c0`) ou si le compte AWS Academy est réinitialisé (« Reset » du lab) : réserver alors une nouvelle IP (`aws ec2 allocate-address --domain vpc`), mettre son identifiant dans `eip_allocation_id` et communiquer la nouvelle URL.
 
 **Points de vigilance**
 
@@ -845,7 +851,7 @@ La clé Mistral, les identifiants SMTP, le HTTPS et les données sont conservés
 
 ### IP fixe et HTTPS
 
-1. **IP fixe :** `allocate_eip = true` dans `terraform.tfvars`, puis `terraform plan`/`apply`. L'IP élastique **remplace** l'IP publique temporaire de l'instance (l'ancienne adresse cesse de fonctionner) et reste identique après arrêt/démarrage. Coût : environ 0,005 $/h, y compris instance arrêtée.
+1. **IP fixe :** de préférence `eip_allocation_id = "eipalloc-..."` (IP réservée une fois, conservée par `terraform destroy`, voir ci-dessus). Avec `allocate_eip = true`, Terraform crée l'IP lui-même mais la **libère** au `destroy`. Dans les deux cas l'IP élastique remplace l'IP publique temporaire de l'instance et reste identique après arrêt/démarrage. Coût : environ 0,005 $/h, y compris instance arrêtée.
 2. **Nom de domaine :** sans domaine acheté, utilisez [sslip.io](https://sslip.io), qui résout `<nom>-<IP avec des tirets>.sslip.io` vers l'IP (aucun compte nécessaire), par exemple `landolsi-tires-18-213-152-8.sslip.io`. Avec un domaine acheté, créez un enregistrement `A` vers l'IP élastique.
 3. **Certificat :**
    ```bash

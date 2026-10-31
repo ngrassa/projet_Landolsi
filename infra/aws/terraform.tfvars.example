@@ -16,6 +16,10 @@ ssh_allowed_cidr = "203.0.113.10/32"
 iam_instance_profile = "LabInstanceProfile"
 
 allocate_eip     = false
+# IP élastique conservée entre les déploiements (même URL pour les clients) :
+# la réserver une fois (aws ec2 allocate-address --domain vpc) puis l'indiquer ici.
+# terraform destroy ne la libère pas. Prioritaire sur allocate_eip.
+# eip_allocation_id = "eipalloc-xxxxxxxxxxxxxxxxx"
 root_volume_size = 20
 
 # Amorçage automatique (dépôt public uniquement). Laisser vide pour une installation manuelle.

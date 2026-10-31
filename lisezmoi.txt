@@ -10,22 +10,24 @@ FAIT
 - Script de restauration et workflow GitHub Actions poussés (commit 7c56cf7).
 - Restauration testée sur le serveur : comptages identiques à la production.
 
-INFRASTRUCTURE REDÉPLOYÉE (31/10/2026)
-- 30/10 ~16h45 UTC : terraform destroy (instance i-03337a82d69d55ee7, IP 18.213.152.8
-  libérée).
-- 31/10 : terraform apply -> instance i-0a4b15152bb2634d6, IP élastique 54.146.95.182,
-  https://landolsi-tires-54-146-95-182.sslip.io
-  Sauvegarde finale du 30/10 restaurée (39 commandes / 11 factures, 36 images),
-  assistants IA Mistral configurés (scripts/configure-ai.sh).
+INFRASTRUCTURE (31/10/2026)
+- 31/10 matin : terraform apply -> instance i-0a4b15152bb2634d6,
+  https://landolsi-tires-54-146-95-182.sslip.io (assistants IA, facture par e-mail).
+- 31/10 ~11h UTC : sauvegarde complète puis terraform destroy de l'instance.
+- L'IP élastique 54.146.95.182 (eipalloc-09a864995fee440c0) est CONSERVÉE :
+  elle est hors de l'état Terraform (variable eip_allocation_id). Au prochain
+  terraform apply, le site revient à la MÊME URL. Ne pas la libérer.
+  Coût ~3,6 $/mois sur le budget du lab tant qu'elle n'est pas associée.
 - Procédure complète de redéploiement : README.md §20, « Redéploiement complet
   sur AWS depuis GitHub ».
-- Sauvegarde la plus récente (à restaurer au prochain déploiement), sur le
-  poste d'administration :
-    ~/.local/share/landolsi/backups/landolsi_tires_final_20261030T164228Z.dump.gpg
-    ~/.local/share/landolsi/backups/landolsi_tires_final_20261030T164228Z.dump.sha256.txt
-    ~/.local/share/landolsi/backups/uploads_final_20261030T164228Z.tar.gz.gpg  (images)
-  Même phrase secrète. Avant un nouveau terraform destroy, refaire une sauvegarde
-  (les commandes passées depuis le 31/10 n'y figurent pas).
+- SAUVEGARDE LA PLUS RÉCENTE (31/10/2026 10:59 UTC, 13 utilisateurs, 9 pneus,
+  41 commandes, 12 factures, 36 images), sur le poste d'administration :
+    ~/.local/share/landolsi/backups/landolsi_tires_20261031T105950Z.dump.gpg
+    ~/.local/share/landolsi/backups/landolsi_tires_20261031T105950Z.dump.sha256.txt
+      (somme du dump déchiffré : 4d788eaca750610578c511e53ba48002f6a23dd78ac54ce57120b714bfe39d21)
+    ~/.local/share/landolsi/backups/uploads_20261031T105950Z.tar.gz.gpg  (images)
+  Même phrase secrète (~/.config/landolsi/db-backup.passphrase).
+  Les sauvegardes du 30/10 (final_20261030T164228Z) sont plus anciennes.
 
 PREMIER TEST DU PIPELINE (exécution 41091349816)
 - Échec attendu à l'étape "Télécharger l'archive chiffrée" :

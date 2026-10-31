@@ -135,12 +135,34 @@ resource "aws_instance" "app" {
   }
 }
 
+# -----------------------------------------------------
+# IP élastique
+# -----------------------------------------------------
+# eip_allocation_id renseigné : IP réservée HORS de Terraform (conservée par
+# terraform destroy => même IP, même URL sslip.io d'un déploiement à l'autre).
+# Sinon, allocate_eip = true crée une IP gérée par Terraform (libérée au destroy).
+
+locals {
+  use_existing_eip = var.eip_allocation_id != ""
+  use_eip          = local.use_existing_eip || var.allocate_eip
+}
+
+data "aws_eip" "existing" {
+  count = local.use_existing_eip ? 1 : 0
+  id    = var.eip_allocation_id
+}
+
 resource "aws_eip" "app" {
-  count    = var.allocate_eip ? 1 : 0
-  domain   = "vpc"
-  instance = aws_instance.app.id
+  count  = var.allocate_eip && !local.use_existing_eip ? 1 : 0
+  domain = "vpc"
 
   tags = {
     Name = "${var.project_name}-eip"
   }
+}
+
+resource "aws_eip_association" "app" {
+  count         = local.use_eip ? 1 : 0
+  instance_id   = aws_instance.app.id
+  allocation_id = local.use_existing_eip ? data.aws_eip.existing[0].id : aws_eip.app[0].id
 }

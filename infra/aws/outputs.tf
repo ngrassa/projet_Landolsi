@@ -1,5 +1,8 @@
 locals {
-  public_ip = var.allocate_eip ? aws_eip.app[0].public_ip : aws_instance.app.public_ip
+  public_ip = (
+    var.eip_allocation_id != "" ? data.aws_eip.existing[0].public_ip :
+    var.allocate_eip ? aws_eip.app[0].public_ip : aws_instance.app.public_ip
+  )
 }
 
 output "instance_id" {

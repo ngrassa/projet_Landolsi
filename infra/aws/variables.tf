@@ -74,6 +74,17 @@ variable "allocate_eip" {
   default     = false
 }
 
+variable "eip_allocation_id" {
+  description = "Identifiant (eipalloc-...) d'une IP élastique déjà réservée, à associer à l'instance. Elle n'est PAS libérée par terraform destroy : l'IP et l'URL restent identiques entre deux déploiements. Prioritaire sur allocate_eip."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.eip_allocation_id == "" || can(regex("^eipalloc-[0-9a-f]+$", var.eip_allocation_id))
+    error_message = "eip_allocation_id doit être de la forme eipalloc-xxxxxxxx."
+  }
+}
+
 variable "subnet_id" {
   description = "Sous-réseau public. Vide = premier sous-réseau du VPC par défaut."
   type        = string
