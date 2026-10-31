@@ -1,6 +1,7 @@
 
 const sequelize = require("../db/db");
 const { envoyerNotificationTelegram } = require("../services/telegramService");
+const { envoyerFactureCommandeConfirmee } = require("../services/factureEmailService");
 
 const User = require("../models/UserModel");
 const Pneu = require("../models/PneuModel");
@@ -1214,6 +1215,22 @@ module.exports.updateStatutCommande = async (req, res) => {
 
         }
             
+        // ========================================
+        // E-MAIL AU CLIENT : FACTURE + COMMANDE PRÊTE AU RETRAIT
+        // Uniquement au passage à « confirmée » (pas de renvoi si
+        // l'administrateur réenregistre le même statut).
+        // ========================================
+
+        let emailFacture = null;
+
+        if (statut === "confirmée" && ancienStatut !== "confirmée" && facture) {
+
+            emailFacture =
+                await envoyerFactureCommandeConfirmee(commande);
+
+        }
+
+
         // NOTIFICATION TELEGRAM - CHANGEMENT DE STATUT
         if (ancienStatut !== commande.statut) {
             const messageTelegram =
@@ -1243,7 +1260,10 @@ module.exports.updateStatutCommande = async (req, res) => {
                 commande,
 
             facture:
-                facture
+                facture,
+
+            emailFacture:
+                emailFacture
 
         });
 

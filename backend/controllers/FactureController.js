@@ -4,6 +4,49 @@ const CommandeItem = require("../models/CommandeItem");
 const Pneu = require("../models/PneuModel");
 const Marque = require("../models/MarqueModel");
 const PDFDocument = require("pdfkit");
+const { User } = require("../models/associations");
+
+
+// ========================================
+// CHARGER UNE FACTURE AVEC SA COMMANDE ET SES ARTICLES
+// ========================================
+
+const chargerFacture = (commandeId) => Facture.findOne({
+    where: { commandeId },
+    include: [
+        {
+            model: Commande,
+            as: "commande",
+            include: [
+                {
+                    model: CommandeItem,
+                    as: "items",
+                    include: [
+                        {
+                            model: Pneu,
+                            as: "pneu",
+                            include: [{ model: Marque, as: "marque" }]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+});
+
+
+// ========================================
+// CONTRÔLE D'ACCÈS : le client propriétaire de la commande ou un administrateur
+// ========================================
+
+const peutAccederFacture = async (req, facture) => {
+    if (facture.commande && facture.commande.userId === req.userId) {
+        return true;
+    }
+    const user = await User.findByPk(req.userId, { attributes: ["role"] });
+    return Boolean(user && user.role === "admin");
+};
+
 
 
 // ========================================
@@ -16,48 +59,14 @@ const getFactureByCommandeId = async (req, res) => {
 
         const { commandeId } = req.params;
 
-        const facture = await Facture.findOne({
-
-            where: {
-                commandeId: commandeId
-            },
-
-            include: [
-                {
-                    model: Commande,
-                    as: "commande",
-
-                    include: [
-                        {
-                            model: CommandeItem,
-                            as: "items",
-
-                            include: [
-                                {
-                                    model: Pneu,
-                                    as: "pneu",
-
-                                    include: [
-                                        {
-                                            model: Marque,
-                                            as: "marque"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-
-        });
-
+        const facture = await chargerFacture(commandeId);
 
         // ========================================
-        // VÉRIFIER SI LA FACTURE EXISTE
+        // VÉRIFIER SI LA FACTURE EXISTE ET APPARTIENT AU CLIENT
+        // (introuvable ou commande d'un autre client : même réponse)
         // ========================================
 
-        if (!facture) {
+        if (!facture || !(await peutAccederFacture(req, facture))) {
 
             return res.status(404).json({
 
@@ -105,114 +114,12 @@ const getFactureByCommandeId = async (req, res) => {
 };
 
 
-
-
 // ========================================
-// GÉNÉRER LE PDF D'UNE FACTURE
-// ========================================
-// ========================================
-// GÉNÉRER LE PDF D'UNE FACTURE
+// DESSINER LE CONTENU DE LA FACTURE
+// (utilisé pour le téléchargement et pour l'envoi par e-mail)
 // ========================================
 
-const generateFacturePDF = async (req, res) => {
-
-    try {
-
-        const { commandeId } = req.params;
-
-
-        // ========================================
-        // RÉCUPÉRER LA FACTURE
-        // ========================================
-
-        const facture = await Facture.findOne({
-
-            where: {
-                commandeId: commandeId
-            },
-
-            include: [
-                {
-                    model: Commande,
-                    as: "commande",
-
-                    include: [
-                        {
-                            model: CommandeItem,
-                            as: "items",
-
-                            include: [
-                                {
-                                    model: Pneu,
-                                    as: "pneu",
-
-                                    include: [
-                                        {
-                                            model: Marque,
-                                            as: "marque"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-
-        });
-
-
-        // ========================================
-        // VÉRIFIER LA FACTURE
-        // ========================================
-
-        if (!facture) {
-
-            return res.status(404).json({
-
-                success: false,
-
-                message: "Facture introuvable."
-
-            });
-
-        }
-
-
-        // ========================================
-        // CRÉER LE DOCUMENT PDF
-        // ========================================
-
-        const doc = new PDFDocument({
-            size: "A4",
-            margin: 50
-        });
-
-
-        // ========================================
-        // NOM DU FICHIER
-        // ========================================
-
-        const filename =
-            `${facture.numeroFacture}.pdf`;
-
-
-        // ========================================
-        // HEADERS
-        // ========================================
-
-        res.setHeader(
-            "Content-Type",
-            "application/pdf"
-        );
-
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="${filename}"`
-        );
-
-
-        doc.pipe(res);
+const dessinerFacture = (doc, facture) => {
 
 
         // ========================================
@@ -626,27 +533,65 @@ doc
 // TERMINER LE PDF
 // ========================================
 
-doc.end();
+};
 
+
+// ========================================
+// PDF EN MÉMOIRE (pièce jointe d'e-mail)
+// ========================================
+
+const genererFacturePdfBuffer = (facture) => new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    try {
+        dessinerFacture(doc, facture);
+        doc.end();
+    } catch (error) {
+        reject(error);
+    }
+});
+
+
+// ========================================
+// TÉLÉCHARGER LE PDF D'UNE FACTURE
+// ========================================
+
+const generateFacturePDF = async (req, res) => {
+
+    try {
+
+        const { commandeId } = req.params;
+
+        const facture = await chargerFacture(commandeId);
+
+        // Introuvable OU appartenant à un autre client : même réponse
+        if (!facture || !(await peutAccederFacture(req, facture))) {
+            return res.status(404).json({
+                success: false,
+                message: "Facture introuvable."
+            });
+        }
+
+        const pdf = await genererFacturePdfBuffer(facture);
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${facture.numeroFacture}.pdf"`
+        );
+
+        return res.send(pdf);
 
     } catch (error) {
 
-        console.error(
-            "❌ Erreur génération PDF facture :",
-            error
-        );
-
+        console.error("❌ Erreur génération PDF facture :", error);
 
         return res.status(500).json({
-
             success: false,
-
-            message:
-                "Impossible de générer la facture PDF.",
-
-            error:
-                error.message
-
+            message: "Impossible de générer la facture PDF."
         });
 
     }
@@ -656,5 +601,7 @@ doc.end();
 
 module.exports = {
     getFactureByCommandeId,
-    generateFacturePDF
+    generateFacturePDF,
+    chargerFacture,
+    genererFacturePdfBuffer
 };

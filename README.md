@@ -102,6 +102,21 @@ Ajout d'une double authentification facultative par **application Authenticator*
 | Écran du code à la connexion, réglages MFA (profil client, menu admin « Sécurité (MFA) »), badge et réinitialisation dans la gestion des utilisateurs | `frontend/src/components/Auth/Login.jsx`, `MfaSettings.jsx`, `components/admin/AdminSecurite.jsx`, `AdminUtilisateurs.jsx`, `pages/Profile.jsx` |
 | Tests | `backend/test/mfa.test.js` (unitaires), `backend/test/api.test.js` (parcours complet) |
 
+### Facture envoyée par e-mail à la confirmation (31 octobre 2026)
+
+Lorsque l'administrateur passe une commande au statut **« confirmée »** (après l'avoir vérifiée avec le client, page *Admin > Commandes*) :
+
+1. une fenêtre lui rappelle que la facture va partir par e-mail et lui demande de confirmer ;
+2. la facture est créée (comme avant), le PDF est généré en mémoire et envoyé à l'adresse e-mail du **compte client** ;
+3. l'e-mail (« Votre commande n°… est prête à être récupérée — LANDOLSI TIRES ») indique que la commande est prête au retrait chez LANDOLSI TIRES (Msaken, lien vers le plan d'accès) et joint la facture ;
+4. l'administrateur voit le résultat : « Facture FAC-… envoyée à … » ou la raison de l'échec (SMTP non configuré, client sans e-mail, erreur d'envoi). **Un échec d'envoi n'annule jamais la confirmation.**
+
+L'e-mail n'est envoyé qu'au **passage** à « confirmée » (pas de renvoi si le statut est réenregistré). Fichiers : `backend/services/factureEmailService.js`, `backend/services/emailService.js` (`sendFactureCommandePreteEmail`), `backend/controllers/FactureController.js` (PDF réutilisable : `genererFacturePdfBuffer`), `frontend/src/components/admin/AdminCommandes.jsx`. Tests : `backend/test/facture-email.test.js`.
+
+Configuration : `EMAIL_USER` (adresse Gmail) et `EMAIL_PASS` (**mot de passe d'application** Google, compte avec validation en deux étapes). En production : `scripts/configure-email.sh` (identifiants lus sur l'entrée standard, connexion SMTP vérifiée). Facultatif : `STORE_CITY`, `STORE_MAPS_URL`, `STORE_CONTACT_EMAIL` pour personnaliser le lieu de retrait.
+
+**Correction de sécurité associée :** `GET /factures/commande/:id` et `/factures/commande/:id/pdf` ne vérifiaient que la connexion ; tout client connecté pouvait télécharger la facture d'un autre (nom, adresse, téléphone). Seuls le client propriétaire de la commande et les administrateurs y ont désormais accès (sinon 404).
+
 ### Assistants IA Mistral (31 octobre 2026)
 
 Trois assistants (conseiller pneus, service après-vente, analyse commerciale administrateur) reposant sur l'API Mistral avec appel d'outils métier : voir [§15 bis](#15-bis-assistants-ia-mistral). La clé `MISTRAL_API_KEY` reste exclusivement côté serveur ; au redéploiement, elle est injectée par `scripts/configure-ai.sh` (voir [§20](#redéploiement-complet-sur-aws-depuis-github-procédure-de-référence)).
@@ -137,7 +152,7 @@ Le modèle opérationnel retenu est le **retrait de la commande par le client ch
 - Consultation des promotions.
 - Ajout de pneus au panier et ajustement des quantités.
 - Création d'une commande et consultation de ses détails/statut.
-- Consultation des factures associées aux commandes, selon les actions disponibles dans l'interface.
+- Consultation des factures associées à ses propres commandes (un client ne peut pas ouvrir la facture d'un autre client) ; réception de la facture par e-mail à la confirmation de la commande.
 - Dépôt et consultation d'avis et de réclamations.
 - Utilisation du chatbot d'assistance : conseiller IA pour choisir ses pneus (fiches, comparaison, ajout au panier) et assistant après-vente (suivi de commande, politiques publiées, brouillon de réclamation).
 
@@ -153,6 +168,7 @@ Le modèle opérationnel retenu est le **retrait de la commande par le client ch
 - Assistant IA commercial (menu « Assistant IA ») : indicateurs, ventes, stock, réapprovisionnement, questions en langage naturel.
 - Gestion des réclamations et des avis selon les écrans disponibles.
 - Génération/gestion des factures selon le cycle de confirmation des commandes.
+- Confirmation d'une commande après vérification avec le client : la facture PDF est **envoyée automatiquement par e-mail** au client, avec un message lui indiquant que sa commande est prête à être récupérée chez LANDOLSI TIRES.
 
 Les accès aux opérations administrateur doivent être protégés par les contrôles d'authentification et de rôle côté serveur. Ne vous fiez pas uniquement au masquage des pages dans le frontend.
 
@@ -747,7 +763,7 @@ Sans Terraform, créer l'instance dans la console (Ubuntu 24.04, SSH limité à 
 
 ### Redéploiement complet sur AWS depuis GitHub (procédure de référence)
 
-Procédure à suivre à chaque nouvelle session du lab (ou après `terraform destroy`). Elle part de ce dépôt public : cloud-init clone la branche `master`, installe et déploie automatiquement le code, **assistants IA compris**. Les seuls éléments qui ne sont pas dans Git, par sécurité, sont fournis aux étapes 5 et 6 : la clé Mistral et les données.
+Procédure à suivre à chaque nouvelle session du lab (ou après `terraform destroy`). Elle part de ce dépôt public : cloud-init clone la branche `master`, installe et déploie automatiquement le code, **assistants IA compris**. Les seuls éléments qui ne sont pas dans Git, par sécurité, sont fournis aux étapes 5, 5 bis et 6 : la clé Mistral, les identifiants SMTP et les données.
 
 **Pré-requis sur le poste d'administration :** Terraform ≥ 1.5, AWS CLI, la clé SSH `~/.ssh/landolsi_ec2_ed25519`, la clé Mistral dans `backend/.env` (`MISTRAL_API_KEY=...`), les sauvegardes chiffrées et leur phrase secrète (voir [`lisezmoi.txt`](lisezmoi.txt)).
 
@@ -782,6 +798,11 @@ grep '^MISTRAL_API_KEY=' backend/.env | cut -d= -f2- | \
   ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@$IP 'sudo /opt/landolsi-src/scripts/configure-ai.sh'
 #   -> "Assistant IA opérationnel (test SAV : HTTP 200)". Autre modèle : configure-ai.sh --model <nom>
 
+# 5 bis. E-mail (factures envoyées à la confirmation, mot de passe oublié) : mêmes principes
+grep -E '^EMAIL_(USER|PASS)=' backend/.env | \
+  ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@$IP 'sudo /opt/landolsi-src/scripts/configure-email.sh'
+#   -> "Connexion SMTP vérifiée."
+
 # 6. Données : restaurer la dernière sauvegarde chiffrée (base neuve = vide, sans compte admin)
 B=~/.local/share/landolsi/backups; P=~/.config/landolsi/db-backup.passphrase
 gpg --batch --pinentry-mode loopback --passphrase-file $P -o /tmp/landolsi.dump -d $B/<sauvegarde>.dump.gpg
@@ -811,7 +832,7 @@ ssh -i ~/.ssh/landolsi_ec2_ed25519 ubuntu@<IP> \
   'cd /opt/landolsi-src && sudo git pull --ff-only && sudo scripts/deploy.sh --source /opt/landolsi-src'
 ```
 
-La clé Mistral, le HTTPS et les données sont conservés : ils sont stockés sur le serveur, hors du répertoire de code.
+La clé Mistral, les identifiants SMTP, le HTTPS et les données sont conservés : ils sont stockés sur le serveur, hors du répertoire de code.
 
 **Fin de session :** sauvegarder d'abord (`sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh`, puis rapatrier et chiffrer l'archive comme décrit dans `lisezmoi.txt`), puis `terraform destroy` si l'instance ne doit pas être conservée. L'IP élastique est alors libérée : au prochain déploiement, l'IP et le nom sslip.io changent.
 
@@ -868,6 +889,7 @@ La base de production du 30 octobre 2026 est sauvegardée **chiffrée** (GPG AES
 | Journaux API | `journalctl -u landolsi-backend -f` |
 | Santé | `/opt/landolsi/current/scripts/health-check.sh` |
 | Mise à jour | `cd /opt/landolsi-src && sudo git pull --ff-only && sudo scripts/deploy.sh --source /opt/landolsi-src` |
+| Identifiants SMTP (e-mails) | `grep -E '^EMAIL_(USER\|PASS)=' backend/.env \| ssh … 'sudo /opt/landolsi-src/scripts/configure-email.sh'` |
 | Clé / modèle Mistral | `… \| sudo /opt/landolsi-src/scripts/configure-ai.sh [--model <nom>]` (clé sur l'entrée standard) |
 | Journaux des assistants IA | `journalctl -u landolsi-backend \| grep -E 'Assistant\|Mistral\|Outil IA'` |
 | Retour arrière | `sudo /opt/landolsi/current/scripts/rollback.sh` |

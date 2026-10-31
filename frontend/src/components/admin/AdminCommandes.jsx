@@ -212,11 +212,42 @@ function AdminCommandes() {
         commandeId,
         nouveauStatut
     ) => {
+        // Confirmation : la facture part par e-mail au client
+        if (nouveauStatut === "confirmée") {
+            const commandeActuelle = commandes.find((c) => c.id === commandeId);
+
+            if (commandeActuelle?.statut !== "confirmée") {
+                const ok = window.confirm(
+                    `Confirmer la commande n°${commandeId} ?\n\n` +
+                    "Vérifiez d'abord la commande avec le client.\n" +
+                    "La facture lui sera envoyée automatiquement par e-mail, avec un message " +
+                    "indiquant que sa commande est prête à être récupérée chez LANDOLSI TIRES."
+                );
+
+                if (!ok) {
+                    // Le menu déroulant revient à l'ancien statut
+                    chargerCommandes();
+                    return;
+                }
+            }
+        }
+
         try {
             const response = await updateStatutCommande(
                 commandeId,
                 nouveauStatut
             );
+
+            // Résultat de l'envoi de la facture par e-mail
+            const emailFacture = response.data.emailFacture;
+
+            if (emailFacture) {
+                alert(
+                    emailFacture.envoye
+                        ? `✅ Commande confirmée.\n${emailFacture.message}`
+                        : `⚠️ Commande confirmée, mais ${emailFacture.message.charAt(0).toLowerCase()}${emailFacture.message.slice(1)}`
+                );
+            }
 
             if (response.data.success) {
                 setCommandes((anciennesCommandes) =>
