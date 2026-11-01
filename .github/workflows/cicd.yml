@@ -32,7 +32,8 @@
 #
 # Déclenchement :
 #   Le pipeline ne s'exécute QUE sur demande explicite dans un message de commit :
-#   - push sur master avec « [deploy] » dans un message de commit : phases 1, 2 et 3
+#   (marqueur cherché dans le TITRE, 1re ligne, des commits poussés)
+#   - push sur master avec « [deploy] » dans un titre de commit : phases 1, 2 et 3
 #     (VM AWS, déploiement, restauration de la base, analyses de sécurité) ;
 #   - push sur master avec « [ci] » : phases 1 et 3 (aucune ressource AWS) ;
 #   - push SANS marqueur : aucun job exécuté (seul le job 0 lit le message, ≈ 5 s) ;
@@ -107,13 +108,17 @@ jobs:
           MESSAGES: ${{ toJSON(github.event.commits.*.message) }}
         run: |
           run=false; deploy=false
+          # Marqueur cherché uniquement dans le TITRE (1re ligne) de chaque commit poussé :
+          # une description qui cite « [deploy] » ne déclenche rien.
+          titles=$(jq -r '.[]? | split("\n")[0]' <<<"${MESSAGES:-[]}")
+          echo "Titres des commits poussés :"; echo "${titles:-(aucun)}"
           if [ "$EVENT" = workflow_dispatch ]; then
             run=true
             [ "$INPUT_DEPLOY" = true ] && deploy=true
             reason="bouton Run workflow"
-          elif grep -qiF '[deploy]' <<<"$MESSAGES"; then
+          elif grep -qiF '[deploy]' <<<"$titles"; then
             run=true; deploy=true; reason="marqueur [deploy] dans un commit"
-          elif grep -qiF '[ci]' <<<"$MESSAGES"; then
+          elif grep -qiF '[ci]' <<<"$titles"; then
             run=true; reason="marqueur [ci] dans un commit"
           else
             reason="aucun marqueur [deploy] ou [ci] : push sans pipeline"
