@@ -53,7 +53,10 @@ RESTE À FAIRE (détail au §5)
   [ ] Copier la phrase secrète dans un gestionnaire de mots de passe.
 
 PIPELINE CI/CD GITHUB ACTIONS (1er novembre 2026)
-- Déployer : Actions > "CI/CD — LANDOLSI TIRES" > Run workflow (deploy coché)
+- Un push NE LANCE RIEN, sauf marqueur dans le TITRE du commit :
+    git commit -m "Ma modification [deploy]" && git push   -> pipeline complet
+    git commit -m "Ma modification [ci]" && git push       -> tests sans AWS
+- Déployer aussi par le bouton : Actions > "CI/CD — LANDOLSI TIRES" > Run workflow
     gh workflow run cicd.yml --repo ngrassa/projet_Landolsi -f deploy=true
 - Détruire  : Actions > "Destroy — infrastructure AWS" > Run workflow, saisir DESTROY
     gh workflow run destroy.yml --repo ngrassa/projet_Landolsi -f confirm=DESTROY

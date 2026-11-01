@@ -999,8 +999,12 @@ Priorité à la mise en ligne : `1.x` intégration continue rapide et bloquante 
 
 Secrets requis : `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (à recopier à chaque session AWS Academy) et `SSH_PRIVATE_KEY`. Facultatifs : `MISTRAL_API_KEY`, `EMAIL_USER`/`EMAIL_PASS`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`, `DB_BACKUP_*`.
 
+**Déclenchement uniquement sur demande** : un `push` ne lance rien, sauf si le titre d'un commit poussé contient `[deploy]` (pipeline complet) ou `[ci]` (sans AWS).
+
 ```bash
-gh workflow run cicd.yml    --repo ngrassa/projet_Landolsi -f deploy=true      # déployer
+git commit -m "Ma modification [deploy]" && git push                          # déployer
+git commit -m "Ma modification [ci]" && git push                              # tester sans déployer
+gh workflow run cicd.yml    --repo ngrassa/projet_Landolsi -f deploy=true      # déployer (bouton)
 gh workflow run destroy.yml --repo ngrassa/projet_Landolsi -f confirm=DESTROY  # détruire
 ```
 

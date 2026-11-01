@@ -5,7 +5,7 @@ machine virtuelle AWS, puis le chemin inverse :
 
 | Workflow | Fichier | Déclenchement |
 |---|---|---|
-| **CI/CD — LANDOLSI TIRES** | `.github/workflows/cicd.yml` | push / pull request (phases 1 et 3) ; bouton **Run workflow** (phases 1, 2, 3) |
+| **CI/CD — LANDOLSI TIRES** | `.github/workflows/cicd.yml` | push dont le titre de commit contient `[deploy]` (phases 1, 2, 3) ou `[ci]` (phases 1 et 3) ; bouton **Run workflow** |
 | **Destroy — infrastructure AWS** | `.github/workflows/destroy.yml` | bouton **Run workflow** + saisie `DESTROY` |
 
 Fichiers associés :
@@ -18,6 +18,30 @@ Fichiers associés :
 | `.zap/rules.tsv` | réglage des règles OWASP ZAP (faux positifs justifiés) |
 | `infra/aws/.checkov.yaml` | exceptions Checkov justifiées (contexte AWS Academy) |
 
+## 0. Déclenchement : uniquement sur demande dans le titre du commit
+
+Un `push` ne lance **rien**, sauf si le **titre** (première ligne) d'un des
+commits poussés contient un marqueur :
+
+| Marqueur dans le titre | Exécution |
+|---|---|
+| `[deploy]` | pipeline complet : CI → VM AWS → déploiement + restauration de la base → analyses de sécurité |
+| `[ci]` | CI + analyses de sécurité, **sans** ressource AWS |
+| aucun | push sans pipeline : seul le job « 0. Déclenchement » lit le message (quelques secondes), les 15 autres sont ignorés |
+
+```bash
+git commit -m "Correction du calcul des promotions [deploy]" && git push   # déploie
+git commit -m "Refonte du panier [ci]" && git push                          # teste sans déployer
+git commit -m "Coquilles dans le README" && git push                        # aucune action
+```
+
+Le marqueur n'est lu que dans le titre : une description qui cite `[deploy]`
+ne déclenche rien. Le bouton **Run workflow** reste disponible (case `deploy`).
+Les pull requests ne déclenchent plus le pipeline, et `db-restore.yml` n'est plus
+lancé par un push (bouton seulement). GitHub affiche quand même une ligne pour
+chaque push, avec le seul job 0 exécuté : un workflow ne peut pas filtrer sur le
+message de commit avant de démarrer.
+
 ## 1. Vue d'ensemble
 
 Priorité : **la VM AWS et le site en ligne d'abord**, les analyses de sécurité
@@ -26,7 +50,7 @@ longues ensuite. Durées mesurées sur GitHub : phase 1 ≈ 1 min ; ZAP actif �
 ```
 push / PR / bouton
         │
- PHASE 1 (≈1 min, bloquante)        PHASE 2 (bouton ou AUTO_DEPLOY)          PHASE 3 (à la fin)
+ PHASE 1 (≈1 min, bloquante)        PHASE 2 ([deploy] ou bouton)             PHASE 3 (à la fin)
         ├── 1.1 Qualité ───┐
         ├── 1.2 Tests ─────┤
         ├── 1.3 Build ─────┼──► 1.5 Porte CI ──► 2.1 AWS prérequis
@@ -44,7 +68,7 @@ push / PR / bouton
                                                                               3.6 Rapport final
 ```
 
-Sans déploiement (push, pull request), la phase 3 démarre dès la porte CI.
+Sans déploiement (marqueur `[ci]`), la phase 3 démarre dès la porte CI.
 Le DAST production (ZAP passif, Nuclei, testssl, > 2 min 40) a été retiré : trop long
 pour un apport faible, l'OWASP ZAP **actif** de la préproduction couvre l'application.
 Les analyses de la phase 3 s'exécutent même si une étape précédente a échoué
@@ -223,7 +247,6 @@ Options : `backup` (défaut oui), `delete_root_volume` (défaut non),
 | `SECURITY_GROUP_ID` | recherche par nom | groupe imposé |
 | `MISTRAL_MODEL` | `ministral-14b-latest` | modèle Mistral |
 | `LETSENCRYPT_EMAIL` | aucun | e-mail du compte Let's Encrypt |
-| `AUTO_DEPLOY` | `false` | `true` = déploiement à chaque push sur master |
 | `ENABLE_HTTPS` | `true` | HTTPS lors des déploiements automatiques |
 
 ### Sauvegardes sans secret supplémentaire : clé dérivée de la clé SSH
@@ -256,7 +279,9 @@ pipeline, restaurer par SSH (README §20, étape 6), puis Destroy la dépose dan
 ## 8. Utilisation
 
 ```bash
-# Déployer (équivalent du bouton Run workflow)
+# Déployer : marqueur [deploy] dans le titre du commit...
+git commit -m "Ma modification [deploy]" && git push
+# ... ou bouton Run workflow
 gh workflow run cicd.yml --repo ngrassa/projet_Landolsi -f deploy=true
 gh run watch --repo ngrassa/projet_Landolsi
 
