@@ -160,8 +160,15 @@ chiffré), règles HTTP/HTTPS/SSH du Security Group, association de l'IP élasti
 6. Secrets facultatifs, transmis sur l'entrée standard (jamais en ligne de
    commande, jamais dans Terraform) : `MISTRAL_API_KEY`, `EMAIL_USER`/`EMAIL_PASS`,
    `ADMIN_EMAIL`/`ADMIN_PASSWORD` (seulement si aucun administrateur),
-   `DB_BACKUP_URL`/`DB_BACKUP_PASSPHRASE` (restauration seulement sur base vide).
-7. `health-check.sh` (API, Nginx, frontend, certificat) et état des services.
+   `DB_BACKUP_*` (voir ci-dessous).
+7. **Restauration de la base, dans la foulée** (uniquement sur base vide : une base
+   peuplée n'est jamais écrasée). Source la plus récente disponible, toujours
+   chiffrée GPG AES-256 : sauvegarde déposée dans S3 par le pipeline Destroy, sinon
+   secret `DB_BACKUP_GPG_B64`, sinon `DB_BACKUP_URL`. Déchiffrement sur le runner
+   (`DB_BACKUP_PASSPHRASE`, intégrité vérifiée par GPG), `restore-db.sh`, puis
+   migrations récentes réappliquées ; comptages publiés dans le résumé. Les images
+   du catalogue sont déjà dans le dépôt.
+8. `health-check.sh` (API, Nginx, frontend, certificat) et état des services.
 
 ### 2.4 Tests de fumée (depuis Internet)
 Page d'accueil, `/api/health` (base up), catalogue, route admin → 401, 404 sans
@@ -185,7 +192,7 @@ URL du site, instance, IP, résultat de chaque étape des trois phases.
 | Job | Action |
 |---|---|
 | D1 Vérifications | confirmation, identifiants, état S3, liste des ressources |
-| D2 Sauvegarde | `backup-db.sh` sur le serveur, **instantané EBS** du volume racine ; archive **chiffrée GPG** téléchargeable si `DB_BACKUP_PASSPHRASE` existe (le dépôt est public : jamais de données en clair) |
+| D2 Sauvegarde | `backup-db.sh` sur le serveur, **instantané EBS** du volume racine ; si `DB_BACKUP_PASSPHRASE` existe : archive **chiffrée GPG** téléchargeable et copie dans le bucket S3 privé (`backups/landolsi_tires_latest.dump.gpg`), **restaurée automatiquement au prochain déploiement** (le dépôt est public : jamais de données en clair) |
 | D3 Destruction | `terraform plan -destroy` affiché, puis destroy ; vérification `instance-terminated` et état vide. Ne s'exécute **pas** si la sauvegarde a échoué |
 | D4 Nettoyage | règles SSH temporaires ; volume racine supprimé **sur option** (refusé sans instantané ni archive) ; IP élastique libérée **sur option** |
 | D5 Rapport | ce qui est supprimé / conservé |
@@ -204,7 +211,9 @@ Options : `backup` (défaut oui), `delete_root_volume` (défaut non),
 | `MISTRAL_API_KEY` | non | assistants IA |
 | `EMAIL_USER`, `EMAIL_PASS` | non | factures par e-mail |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | non | compte administrateur sur une base neuve |
-| `DB_BACKUP_URL`, `DB_BACKUP_TOKEN`, `DB_BACKUP_PASSPHRASE` | non | restauration automatique / sauvegarde chiffrée |
+| `DB_BACKUP_PASSPHRASE` | pour restaurer | phrase secrète GPG des sauvegardes (`~/.config/landolsi/db-backup.passphrase`) |
+| `DB_BACKUP_GPG_B64` | non | sauvegarde chiffrée de référence en base64 (archive < 36 Ko) |
+| `DB_BACKUP_URL`, `DB_BACKUP_TOKEN` | non | sauvegarde chiffrée sur un stockage privé externe |
 
 **Variables** (onglet Variables)
 
@@ -219,6 +228,16 @@ Options : `backup` (défaut oui), `delete_root_volume` (défaut non),
 | `LETSENCRYPT_EMAIL` | aucun | e-mail du compte Let's Encrypt |
 | `AUTO_DEPLOY` | `false` | `true` = déploiement à chaque push sur master |
 | `ENABLE_HTTPS` | `true` | HTTPS lors des déploiements automatiques |
+
+### Mettre en place la restauration automatique (une seule fois)
+
+```bash
+gh secret set DB_BACKUP_PASSPHRASE --repo ngrassa/projet_Landolsi < ~/.config/landolsi/db-backup.passphrase
+base64 -w0 ~/.local/share/landolsi/backups/landolsi_tires_20261031T174440Z.dump.gpg \
+  | gh secret set DB_BACKUP_GPG_B64 --repo ngrassa/projet_Landolsi
+```
+
+Ensuite, le cycle Destroy → Déploiement conserve les données sans intervention.
 
 ## 8. Utilisation
 

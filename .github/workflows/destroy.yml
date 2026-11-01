@@ -5,7 +5,8 @@
 #
 #   D1 Vérifications   confirmation, identifiants AWS, lecture de l'état Terraform (S3)
 #   D2 Sauvegarde      pg_dump sur le serveur + instantané EBS du volume racine
-#                      (+ archive chiffrée GPG téléchargeable si DB_BACKUP_PASSPHRASE existe)
+#                      (+ si DB_BACKUP_PASSPHRASE existe : archive chiffrée GPG téléchargeable
+#                      et copie dans le bucket S3 privé, restaurée au prochain déploiement)
 #   D3 Destruction     terraform plan -destroy (affiché) puis terraform destroy :
 #                      instance EC2, association de l'IP élastique, règles du Security Group
 #   D4 Nettoyage       règles SSH temporaires, volume racine et IP élastique (sur option)
@@ -225,6 +226,12 @@ jobs:
             rm -f "backup/$f"
           done
           ls -l backup
+          # Copie dans le bucket S3 privé (chiffré SSE, accès public bloqué) : le prochain
+          # déploiement du pipeline CI/CD restaure automatiquement cette version.
+          bucket="${PROJECT}-tfstate-$(aws sts get-caller-identity --query Account --output text)-${AWS_REGION}"
+          aws s3 cp "backup/landolsi_tires_${ts}.dump.gpg" "s3://$bucket/$PROJECT/backups/landolsi_tires_${ts}.dump.gpg" --sse AES256 --only-show-errors
+          aws s3 cp "backup/landolsi_tires_${ts}.dump.gpg" "s3://$bucket/$PROJECT/backups/landolsi_tires_latest.dump.gpg" --sse AES256 --only-show-errors
+          echo "- Copie chiffrée dans \`s3://$bucket/$PROJECT/backups/\` (restaurée au prochain déploiement)" >> "$GITHUB_STEP_SUMMARY"
           echo "created=true" >> "$GITHUB_OUTPUT"
           echo "- Archive chiffrée (GPG AES-256) : artefact \`backup-predestroy-${ts}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "TS=$ts" >> "$GITHUB_ENV"

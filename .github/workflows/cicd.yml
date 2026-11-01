@@ -1093,29 +1093,59 @@ jobs:
           printf 'EMAIL_USER=%s\nEMAIL_PASS=%s\n' "$EMAIL_USER" "$EMAIL_PASS" \
             | ssh ec2 'sudo /opt/landolsi-src/scripts/configure-email.sh'
 
-      - name: Données (restauration de la sauvegarde chiffrée sur une base neuve)
+      - name: Restauration de la base de données (dans la foulée du déploiement)
+        # Uniquement sur une base VIDE (nouvelle VM) : une base déjà peuplée n'est jamais écrasée.
+        # Source, de la plus récente à la plus ancienne (toujours chiffrée GPG AES-256,
+        # jamais publiée : le dépôt est public) :
+        #   1. s3://<bucket d'état>/landolsi-tires/backups/landolsi_tires_latest.dump.gpg
+        #      (déposée par le pipeline Destroy juste avant la suppression de la VM) ;
+        #   2. secret DB_BACKUP_GPG_B64 (archive chiffrée encodée en base64, < 48 Ko) ;
+        #   3. secret DB_BACKUP_URL (+ DB_BACKUP_TOKEN) : stockage privé externe.
+        # Déchiffrement : secret DB_BACKUP_PASSPHRASE. Les images sont déjà dans le dépôt.
         env:
+          DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
+          DB_BACKUP_GPG_B64: ${{ secrets.DB_BACKUP_GPG_B64 }}
           DB_BACKUP_URL: ${{ secrets.DB_BACKUP_URL }}
           DB_BACKUP_TOKEN: ${{ secrets.DB_BACKUP_TOKEN }}
-          DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
         run: |
-          users=$(ssh ec2 'sudo -u postgres psql -XAtd landolsi_tires -c "SELECT count(*) FROM users"' || echo "?")
-          echo "Utilisateurs en base : $users"
-          if [ -z "$DB_BACKUP_URL" ] || [ -z "$DB_BACKUP_PASSPHRASE" ]; then
-            echo "::notice::DB_BACKUP_URL/DB_BACKUP_PASSPHRASE absents : pas de restauration automatique (base conservée : $users utilisateur(s))."
+          count() { ssh ec2 "sudo -u postgres psql -XAtd landolsi_tires -c 'SELECT count(*) FROM $1'"; }
+          users=$(count users || echo "?")
+          echo "Utilisateurs en base avant restauration : $users"
+          echo "## 2.3 bis Restauration de la base" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$users" != 0 ]; then
+            echo "Base déjà peuplée ($users utilisateurs) : restauration ignorée, aucune donnée écrasée." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          if [ "$users" != 0 ]; then
-            echo "Base déjà peuplée ($users utilisateurs) : restauration ignorée (aucune donnée écrasée)."
+          if [ -z "$DB_BACKUP_PASSPHRASE" ]; then
+            echo "::warning::DB_BACKUP_PASSPHRASE absent : base vide laissée en l'état (voir docs/deployment/cicd-pipeline.md §7)."
+            echo "⚠️ Aucune restauration : secret DB_BACKUP_PASSPHRASE absent." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           umask 077
-          auth=(); [ -z "$DB_BACKUP_TOKEN" ] || auth=(-H "Authorization: Bearer $DB_BACKUP_TOKEN")
-          curl -fsSL --retry 3 "${auth[@]}" -o "$RUNNER_TEMP/backup.dump.gpg" "$DB_BACKUP_URL"
+          archive="$RUNNER_TEMP/backup.dump.gpg"
+          bucket="${PROJECT}-tfstate-$(aws sts get-caller-identity --query Account --output text)-${AWS_REGION}"
+          if aws s3 cp "s3://$bucket/$PROJECT/backups/landolsi_tires_latest.dump.gpg" "$archive" --only-show-errors 2>/dev/null; then
+            source="S3 (dernière sauvegarde du pipeline Destroy, $(aws s3api head-object --bucket "$bucket" --key "$PROJECT/backups/landolsi_tires_latest.dump.gpg" --query LastModified --output text))"
+          elif [ -n "$DB_BACKUP_GPG_B64" ]; then
+            printf '%s' "$DB_BACKUP_GPG_B64" | base64 -d > "$archive"
+            source="secret DB_BACKUP_GPG_B64"
+          elif [ -n "$DB_BACKUP_URL" ]; then
+            auth=(); [ -z "$DB_BACKUP_TOKEN" ] || auth=(-H "Authorization: Bearer $DB_BACKUP_TOKEN")
+            curl -fsSL --retry 3 "${auth[@]}" -o "$archive" "$DB_BACKUP_URL"
+            source="DB_BACKUP_URL"
+          else
+            echo "::warning::Aucune sauvegarde disponible (S3, DB_BACKUP_GPG_B64, DB_BACKUP_URL) : base vide."
+            echo "⚠️ Aucune sauvegarde disponible." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Source : $source"
+          # GPG vérifie l'intégrité (MDC) : une archive altérée ou une mauvaise phrase secrète échoue ici
           printf '%s' "$DB_BACKUP_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
-            -o "$RUNNER_TEMP/ci_restore.dump" -d "$RUNNER_TEMP/backup.dump.gpg"
+            -o "$RUNNER_TEMP/ci_restore.dump" -d "$archive"
           (cd "$RUNNER_TEMP" && sha256sum ci_restore.dump > ci_restore.dump.sha256)
-          scp "$RUNNER_TEMP/ci_restore.dump" "$RUNNER_TEMP/ci_restore.dump.sha256" ec2:/tmp/
+          echo "SHA-256 de l'archive déchiffrée : $(cut -d' ' -f1 "$RUNNER_TEMP/ci_restore.dump.sha256")"
+          scp -q "$RUNNER_TEMP/ci_restore.dump" "$RUNNER_TEMP/ci_restore.dump.sha256" ec2:/tmp/
+          rm -f "$archive" "$RUNNER_TEMP"/ci_restore.dump*
           ssh ec2 'bash -s' <<'EOF'
           set -euo pipefail
           D=/var/backups/landolsi/ci_restore.dump
@@ -1126,11 +1156,22 @@ jobs:
           trap 'sudo systemctl start landolsi-backend' EXIT
           sudo -u landolsi /opt/landolsi/current/scripts/restore-db.sh --env-file /etc/landolsi/backend.env \
             --file "$D" --target-db landolsi_tires --allow-nonempty
+          # Migrations postérieures à la sauvegarde (ex. MFA) réappliquées
           cd /opt/landolsi/current/backend
           sudo -u landolsi env NODE_ENV=production ENV_FILE=/etc/landolsi/backend.env ./node_modules/.bin/sequelize-cli db:migrate
+          sudo systemctl start landolsi-backend
+          trap - EXIT
           EOF
-          rm -f "$RUNNER_TEMP"/backup.dump.gpg "$RUNNER_TEMP"/ci_restore.dump*
-          echo "Sauvegarde restaurée." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "Source : $source"
+            echo
+            echo "| Table | Lignes restaurées |"
+            echo "|---|---|"
+            for t in users '"Marques"' '"Pneus"' commandes factures avis; do
+              echo "| ${t//\"/} | $(count "$t") |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Base restaurée : $(count users) utilisateurs, $(count '"Pneus"') pneus, $(count commandes) commandes."
 
       - name: Compte administrateur (si ADMIN_EMAIL / ADMIN_PASSWORD et aucun admin)
         env:
