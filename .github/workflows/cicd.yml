@@ -18,7 +18,7 @@
 #                        IP élastique, clé SSH
 #     2.2 Terraform      plan (garde-fou anti-destruction) puis apply : création de la VM
 #     2.3 Déploiement    cloud-init, version du commit, HTTPS Let's Encrypt, secrets,
-#                        contrôle de santé
+#                        RESTAURATION DE LA BASE (sauvegarde S3 chiffrée), contrôle de santé
 #     2.4 Tests de fumée site public, API, ports fermés, en-têtes, TLS
 #
 #   PHASE 3 — ANALYSES DE SÉCURITÉ APPROFONDIES (à la fin, en parallèle)
@@ -26,9 +26,9 @@
 #     3.2 Semgrep        règles OWASP Top 10, Node.js, React, Terraform, Actions
 #     3.3 SCA            npm audit (haute/critique = échec), Trivy, SBOM CycloneDX
 #     3.4 IaC            Checkov + Trivy config sur Terraform et workflows
-#     3.5 DAST préprod   application reconstruite dans le runner, OWASP ZAP ACTIF
-#     3.6 DAST prod      ZAP baseline (passif), Nuclei, testssl.sh sur le site déployé
-#     3.7 Rapport        récapitulatif de toutes les étapes et URL du site
+#     3.5 DAST           application reconstruite dans le runner, OWASP ZAP ACTIF
+#                        (attaques réelles sur une base jetable, jamais sur la production)
+#     3.6 Rapport        récapitulatif de toutes les étapes et URL du site
 #
 # Déclenchement :
 #   - push / pull request : phases 1 et 3 (aucune ressource AWS) ;
@@ -38,8 +38,8 @@
 # Secrets (Settings > Secrets and variables > Actions) :
 #   obligatoires : AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, SSH_PRIVATE_KEY
 #   facultatifs  : MISTRAL_API_KEY, EMAIL_USER, EMAIL_PASS, ADMIN_EMAIL, ADMIN_PASSWORD,
-#                  DB_BACKUP_URL, DB_BACKUP_TOKEN, DB_BACKUP_PASSPHRASE
-# Variables facultatives : AWS_REGION, INSTANCE_TYPE, ADMIN_SSH_CIDR, EIP_ALLOCATION_ID,
+#                  DB_BACKUP_PASSPHRASE, DB_BACKUP_GPG_B64, DB_BACKUP_URL, DB_BACKUP_TOKEN
+# Variables facultatives : AWS_REGION, INSTANCE_TYPE, ADMIN_SSH_CIDR, ADMIN_SSH_PUBLIC_KEY, EIP_ALLOCATION_ID,
 #                  SECURITY_GROUP_ID, MISTRAL_MODEL, LETSENCRYPT_EMAIL, AUTO_DEPLOY, ENABLE_HTTPS
 # Documentation : docs/deployment/cicd-pipeline.md
 # Destruction    : workflow « Destroy » (.github/workflows/destroy.yml)
@@ -1065,6 +1065,15 @@ jobs:
           echo "Version active : $(basename "$(readlink -f /opt/landolsi/current)")"
           EOF
 
+      - name: Clé SSH de l'administrateur (variable ADMIN_SSH_PUBLIC_KEY, clé publique)
+        env:
+          ADMIN_SSH_PUBLIC_KEY: ${{ vars.ADMIN_SSH_PUBLIC_KEY }}
+        run: |
+          if [ -z "$ADMIN_SSH_PUBLIC_KEY" ]; then echo "Aucune clé administrateur (facultatif)."; exit 0; fi
+          ssh-keygen -lf <(printf '%s\n' "$ADMIN_SSH_PUBLIC_KEY") || { echo "::error::ADMIN_SSH_PUBLIC_KEY invalide"; exit 1; }
+          printf '%s\n' "$ADMIN_SSH_PUBLIC_KEY" | ssh ec2 'k=$(cat); grep -qxF "$k" ~/.ssh/authorized_keys || echo "$k" >> ~/.ssh/authorized_keys'
+          echo "Clé autorisée pour ubuntu : $(ssh-keygen -lf <(printf '%s\n' "$ADMIN_SSH_PUBLIC_KEY") | awk '{print $2, $NF}') (connexion possible depuis ADMIN_SSH_CIDR)"
+
       - name: Assistants IA Mistral (si le secret MISTRAL_API_KEY existe)
         continue-on-error: true
         env:
@@ -1101,7 +1110,8 @@ jobs:
         #      (déposée par le pipeline Destroy juste avant la suppression de la VM) ;
         #   2. secret DB_BACKUP_GPG_B64 (archive chiffrée encodée en base64, < 48 Ko) ;
         #   3. secret DB_BACKUP_URL (+ DB_BACKUP_TOKEN) : stockage privé externe.
-        # Déchiffrement : secret DB_BACKUP_PASSPHRASE. Les images sont déjà dans le dépôt.
+        # Déchiffrement : DB_BACKUP_PASSPHRASE, sinon clé dérivée de SSH_PRIVATE_KEY
+        # (.github/scripts/backup-key.sh). Les images du catalogue sont déjà dans le dépôt.
         env:
           DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
           DB_BACKUP_GPG_B64: ${{ secrets.DB_BACKUP_GPG_B64 }}
@@ -1114,11 +1124,6 @@ jobs:
           echo "## 2.3 bis Restauration de la base" >> "$GITHUB_STEP_SUMMARY"
           if [ "$users" != 0 ]; then
             echo "Base déjà peuplée ($users utilisateurs) : restauration ignorée, aucune donnée écrasée." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if [ -z "$DB_BACKUP_PASSPHRASE" ]; then
-            echo "::warning::DB_BACKUP_PASSPHRASE absent : base vide laissée en l'état (voir docs/deployment/cicd-pipeline.md §7)."
-            echo "⚠️ Aucune restauration : secret DB_BACKUP_PASSPHRASE absent." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           umask 077
@@ -1140,8 +1145,14 @@ jobs:
           fi
           echo "Source : $source"
           # GPG vérifie l'intégrité (MDC) : une archive altérée ou une mauvaise phrase secrète échoue ici
-          printf '%s' "$DB_BACKUP_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
-            -o "$RUNNER_TEMP/ci_restore.dump" -d "$archive"
+          decrypt() { gpg --batch --quiet --yes --pinentry-mode loopback --passphrase-fd 0 -o "$RUNNER_TEMP/ci_restore.dump" -d "$archive"; }
+          if ! .github/scripts/backup-key.sh | decrypt; then
+            # Archive chiffrée avec l'autre clé (phrase secrète <-> clé dérivée de SSH)
+            if [ -z "$DB_BACKUP_PASSPHRASE" ] || ! DB_BACKUP_PASSPHRASE="" .github/scripts/backup-key.sh | decrypt; then
+              echo "::error::Déchiffrement impossible : phrase secrète ou clé SSH différente de celle de la sauvegarde."
+              exit 1
+            fi
+          fi
           (cd "$RUNNER_TEMP" && sha256sum ci_restore.dump > ci_restore.dump.sha256)
           echo "SHA-256 de l'archive déchiffrée : $(cut -d' ' -f1 "$RUNNER_TEMP/ci_restore.dump.sha256")"
           scp -q "$RUNNER_TEMP/ci_restore.dump" "$RUNNER_TEMP/ci_restore.dump.sha256" ec2:/tmp/
@@ -1261,107 +1272,9 @@ jobs:
           printf '%s\n' "${rows[@]}"
           exit $fail
 
-  dast-prod:
-    name: "3.6 DAST production (ZAP baseline, Nuclei, TLS)"
-    needs: [terraform, deploy, smoke]
-    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    env:
-      URL: ${{ needs.deploy.outputs.url }}
-      HTTPS: ${{ needs.deploy.outputs.https }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: "OWASP ZAP — baseline (passif, sans attaque : adapté à la production)"
-        uses: zaproxy/action-baseline@v0.15.0
-        with:
-          target: ${{ needs.deploy.outputs.url }}
-          rules_file_name: .zap/rules.tsv
-          cmd_options: "-j -m 3"
-          allow_issue_writing: false
-          fail_action: false
-          artifact_name: zap-production
-
-      - name: Résultats ZAP
-        if: always()
-        run: |
-          [ -f report_json.json ] || exit 0
-          {
-            echo "## 3.6 DAST production"
-            echo "### OWASP ZAP baseline"
-            echo "| Risque | Alerte | Occurrences |"
-            echo "|---|---|---|"
-            jq -r '.site[].alerts[] | "| \(.riskdesc) | \(.alert) | \(.count) |"' report_json.json | sort -r
-          } >> "$GITHUB_STEP_SUMMARY"
-          high=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
-          echo "ZAP_HIGH=$high" >> "$GITHUB_ENV"
-
-      - name: Nuclei (CVE, expositions, mauvaises configurations ; modèles non intrusifs)
-        if: always()
-        run: |
-          mkdir -m 777 -p nuclei
-          # Modèles téléchargés au démarrage (dernière version) ; familles non intrusives
-          # uniquement : CVE, mauvaises configurations, expositions, TLS, technologies.
-          set +e
-          docker run --rm -v "$PWD/nuclei:/out" projectdiscovery/nuclei:latest \
-            -u "$URL" -tags cve,misconfig,exposure,ssl,tech,panel \
-            -severity low,medium,high,critical \
-            -etags dos,fuzz,intrusive,brute-force,default-login -rl 30 -c 10 -timeout 10 \
-            -jsonl -o /out/nuclei.jsonl -stats -si 60
-          rc=$?
-          set -e
-          [ "$rc" -eq 0 ] || { echo "::error::Nuclei n'a pas pu s'exécuter (code $rc)"; exit 1; }
-          touch nuclei/nuclei.jsonl
-          {
-            echo "### Nuclei"
-            echo "| Sévérité | Modèle | Cible |"
-            echo "|---|---|---|"
-            jq -r '"| \(.info.severity) | \(.["template-id"]) | \(.["matched-at"]) |"' nuclei/nuclei.jsonl | sort | head -50
-            echo
-            echo "Total : $(wc -l < nuclei/nuclei.jsonl) constat(s)"
-          } >> "$GITHUB_STEP_SUMMARY"
-          nh=$(jq -s '[.[] | select(.info.severity == "high" or .info.severity == "critical")] | length' nuclei/nuclei.jsonl)
-          echo "NUCLEI_HIGH=$nh" >> "$GITHUB_ENV"
-
-      - name: testssl.sh (protocoles, suites de chiffrement, vulnérabilités TLS)
-        if: always() && env.HTTPS == 'true'
-        run: |
-          mkdir -m 777 -p tls
-          host=$(echo "$URL" | sed -E 's#https?://([^/]+)/?.*#\1#')
-          docker run --rm -v "$PWD/tls:/out" drwetter/testssl.sh:3.2 --quiet --color 0 --warnings off \
-            --protocols --server-defaults --vulnerable --headers \
-            --jsonfile /out/testssl.json --htmlfile /out/testssl.html "$host" > tls/testssl.txt || true
-          {
-            echo "### testssl.sh"
-            echo "| Sévérité | Contrôle | Constat |"
-            echo "|---|---|---|"
-            jq -r '.[] | select(.severity | IN("CRITICAL","HIGH","MEDIUM","LOW")) | "| \(.severity) | \(.id) | \(.finding | .[0:100]) |"' tls/testssl.json | head -40
-          } >> "$GITHUB_STEP_SUMMARY"
-          tc=$(jq '[.[] | select(.severity == "CRITICAL")] | length' tls/testssl.json)
-          echo "TLS_CRITICAL=$tc" >> "$GITHUB_ENV"
-
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: dast-production-reports
-          path: |
-            nuclei/
-            tls/
-          if-no-files-found: ignore
-
-      - name: Porte DAST production
-        if: always()
-        run: |
-          echo "ZAP élevé : ${ZAP_HIGH:-0} | Nuclei élevé/critique : ${NUCLEI_HIGH:-0} | TLS critique : ${TLS_CRITICAL:-0}"
-          if [ "${ZAP_HIGH:-0}" -gt 0 ] || [ "${NUCLEI_HIGH:-0}" -gt 0 ] || [ "${TLS_CRITICAL:-0}" -gt 0 ]; then
-            echo "::error::Vulnérabilité de risque élevé détectée en production"
-            exit 1
-          fi
-
   report:
-    name: "3.7 Rapport final"
-    needs: [gate, aws-preflight, terraform, deploy, smoke, codeql, semgrep, sca, iac, dast-staging, dast-prod]
+    name: "3.6 Rapport final"
+    needs: [gate, aws-preflight, terraform, deploy, smoke, codeql, semgrep, sca, iac, dast-staging]
     if: always()
     runs-on: ubuntu-24.04
     steps:

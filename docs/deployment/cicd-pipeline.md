@@ -39,13 +39,14 @@ push / PR / bouton
                                                                               3.2 Semgrep
                                                                               3.3 SCA + SBOM
                                                                               3.4 IaC (Checkov, Trivy)
-                                                                              3.5 DAST préprod (ZAP actif)
-                                                                              3.6 DAST prod (ZAP, Nuclei, TLS)
+                                                                              3.5 DAST (ZAP actif, préprod)
                                                                                       ▼
-                                                                              3.7 Rapport final
+                                                                              3.6 Rapport final
 ```
 
 Sans déploiement (push, pull request), la phase 3 démarre dès la porte CI.
+Le DAST production (ZAP passif, Nuclei, testssl, > 2 min 40) a été retiré : trop long
+pour un apport faible, l'OWASP ZAP **actif** de la préproduction couvre l'application.
 Les analyses de la phase 3 s'exécutent même si une étape précédente a échoué
 (rapports toujours produits) ; un constat bloquant y rend le run **rouge** et
 apparaît dans le rapport final, sans retirer le site déjà en ligne.
@@ -165,7 +166,8 @@ chiffré), règles HTTP/HTTPS/SSH du Security Group, association de l'IP élasti
    peuplée n'est jamais écrasée). Source la plus récente disponible, toujours
    chiffrée GPG AES-256 : sauvegarde déposée dans S3 par le pipeline Destroy, sinon
    secret `DB_BACKUP_GPG_B64`, sinon `DB_BACKUP_URL`. Déchiffrement sur le runner
-   (`DB_BACKUP_PASSPHRASE`, intégrité vérifiée par GPG), `restore-db.sh`, puis
+   (`DB_BACKUP_PASSPHRASE`, sinon **clé dérivée de `SSH_PRIVATE_KEY`** : voir
+   ci-dessous ; intégrité vérifiée par GPG), `restore-db.sh`, puis
    migrations récentes réappliquées ; comptages publiés dans le résumé. Les images
    du catalogue sont déjà dans le dépôt.
 8. `health-check.sh` (API, Nginx, frontend, certificat) et état des services.
@@ -176,13 +178,7 @@ pile d'erreur, en-têtes de sécurité, version Nginx masquée, **ports 5001 et 
 fermés**, SSH fermé après le job, certificat valide, redirection HTTP → HTTPS, HSTS
 (avertissement).
 
-### 3.6 DAST production (non intrusif)
-- **OWASP ZAP baseline** : analyse passive (aucune attaque) ;
-- **Nuclei** : CVE, expositions, mauvaises configurations, modèles intrusifs exclus ;
-- **testssl.sh** : protocoles, suites de chiffrement, vulnérabilités TLS (Heartbleed, ROBOT...).
-Porte : aucune alerte élevée ZAP, aucun constat Nuclei high/critical, aucun constat TLS critique.
-
-### 3.7 Rapport final
+### 3.6 Rapport final
 URL du site, instance, IP, résultat de chaque étape des trois phases.
 
 ## 6. Pipeline Destroy (chemin inverse)
@@ -223,21 +219,39 @@ Options : `backup` (défaut oui), `delete_root_volume` (défaut non),
 | `AWS_REGION` | `us-east-1` | région |
 | `INSTANCE_TYPE` | `t3.small` | type d'instance (push) |
 | `ADMIN_SSH_CIDR` | fermé | votre IP `/32` pour SSH manuel |
+| `ADMIN_SSH_PUBLIC_KEY` | aucune | clé SSH **publique** de l'administrateur, ajoutée sur la VM |
 | `SECURITY_GROUP_ID` | recherche par nom | groupe imposé |
 | `MISTRAL_MODEL` | `ministral-14b-latest` | modèle Mistral |
 | `LETSENCRYPT_EMAIL` | aucun | e-mail du compte Let's Encrypt |
 | `AUTO_DEPLOY` | `false` | `true` = déploiement à chaque push sur master |
 | `ENABLE_HTTPS` | `true` | HTTPS lors des déploiements automatiques |
 
-### Mettre en place la restauration automatique (une seule fois)
+### Sauvegardes sans secret supplémentaire : clé dérivée de la clé SSH
+
+Les sauvegardes manipulées par le pipeline sont chiffrées (GPG AES-256) avec
+`DB_BACKUP_PASSPHRASE` s'il existe, sinon avec une phrase secrète **dérivée de
+`SSH_PRIVATE_KEY`** (`.github/scripts/backup-key.sh` : SHA-256 de la signature
+`ssh-keygen -Y sign` d'un message fixe ; les signatures Ed25519/RSA sont
+déterministes). Aucun secret à ajouter, rien n'est publié : les archives vont dans
+le bucket S3 privé et dans des artefacts chiffrés. Quiconque possède la clé SSH
+du serveur peut les déchiffrer (même niveau de confiance que l'accès au serveur) :
 
 ```bash
-gh secret set DB_BACKUP_PASSPHRASE --repo ngrassa/projet_Landolsi < ~/.config/landolsi/db-backup.passphrase
-base64 -w0 ~/.local/share/landolsi/backups/landolsi_tires_20261031T174440Z.dump.gpg \
-  | gh secret set DB_BACKUP_GPG_B64 --repo ngrassa/projet_Landolsi
+aws s3 cp s3://landolsi-tires-tfstate-<compte>-us-east-1/landolsi-tires/backups/landolsi_tires_latest.dump.gpg .
+.github/scripts/backup-key.sh <clé privée de SSH_PRIVATE_KEY> | gpg --batch --pinentry-mode loopback \
+    --passphrase-fd 0 -o landolsi.dump -d landolsi_tires_latest.dump.gpg
 ```
 
-Ensuite, le cycle Destroy → Déploiement conserve les données sans intervention.
+Si le secret `SSH_PRIVATE_KEY` change, les anciennes archives S3 restent
+déchiffrables avec l'ancienne clé uniquement : le conserver.
+
+**Cycle des données** : Destroy (pg_dump → chiffrement → S3) → déploiement suivant
+(S3 → déchiffrement → `restore-db.sh` → migrations). Une base vide n'écrase jamais
+la dernière sauvegarde S3.
+
+**Injecter une sauvegarde du poste d'administration** (une fois) : variables
+`ADMIN_SSH_PUBLIC_KEY` (clé publique) et `ADMIN_SSH_CIDR` (votre IP/32), lancer le
+pipeline, restaurer par SSH (README §20, étape 6), puis Destroy la dépose dans S3.
 
 ## 8. Utilisation
 

@@ -5,8 +5,8 @@
 #
 #   D1 Vérifications   confirmation, identifiants AWS, lecture de l'état Terraform (S3)
 #   D2 Sauvegarde      pg_dump sur le serveur + instantané EBS du volume racine
-#                      (+ si DB_BACKUP_PASSPHRASE existe : archive chiffrée GPG téléchargeable
-#                      et copie dans le bucket S3 privé, restaurée au prochain déploiement)
+#                      + archive chiffrée GPG (artefact) copiée dans le bucket S3 privé :
+#                      le pipeline CI/CD la restaure automatiquement au prochain déploiement
 #   D3 Destruction     terraform plan -destroy (affiché) puis terraform destroy :
 #                      instance EC2, association de l'IP élastique, règles du Security Group
 #   D4 Nettoyage       règles SSH temporaires, volume racine et IP élastique (sur option)
@@ -203,38 +203,43 @@ jobs:
           echo "snapshot_id=$snap" >> "$GITHUB_OUTPUT"
           echo "- Instantané EBS : \`$snap\` (volume \`$ROOT_VOLUME_ID\`)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Archive chiffrée téléchargeable (si DB_BACKUP_PASSPHRASE existe)
+      - name: Archive chiffrée (artefact + bucket S3 privé, restaurée au prochain déploiement)
         id: artifact
+        # Chiffrement GPG AES-256 avec DB_BACKUP_PASSPHRASE, sinon avec la clé dérivée de
+        # SSH_PRIVATE_KEY (.github/scripts/backup-key.sh) : aucun secret supplémentaire,
+        # aucune donnée en clair publiée (le dépôt est public).
         env:
           DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
         run: |
-          # shellcheck disable=SC2029  # variables développées volontairement côté runner avant l'envoi par ssh
-          if [ -z "$DB_BACKUP_PASSPHRASE" ]; then
-            echo "::notice::DB_BACKUP_PASSPHRASE absent : pas d'archive téléchargeable (le dépôt est public, aucune donnée n'est publiée en clair)."
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           umask 077
           mkdir -p backup
+          users=$(ssh ec2 "sudo -u postgres psql -XAtd landolsi_tires -c 'SELECT count(*) FROM users'")
           ssh ec2 "sudo cat '$DUMP'" > backup/landolsi_tires.dump
           ssh ec2 'sudo tar czf - -C /var/lib/landolsi uploads' > backup/uploads.tar.gz
           ts=$(date -u +%Y%m%dT%H%M%SZ)
           (cd backup && sha256sum landolsi_tires.dump uploads.tar.gz > "SHA256SUMS_${ts}.txt")
+          if [ -n "$DB_BACKUP_PASSPHRASE" ]; then keysrc="DB_BACKUP_PASSPHRASE"; else keysrc="clé dérivée de SSH_PRIVATE_KEY"; fi
           for f in landolsi_tires.dump uploads.tar.gz; do
-            printf '%s' "$DB_BACKUP_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
+            .github/scripts/backup-key.sh | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
               --symmetric --cipher-algo AES256 -o "backup/${f%%.*}_${ts}.${f#*.}.gpg" "backup/$f"
             rm -f "backup/$f"
           done
           ls -l backup
-          # Copie dans le bucket S3 privé (chiffré SSE, accès public bloqué) : le prochain
-          # déploiement du pipeline CI/CD restaure automatiquement cette version.
-          bucket="${PROJECT}-tfstate-$(aws sts get-caller-identity --query Account --output text)-${AWS_REGION}"
-          aws s3 cp "backup/landolsi_tires_${ts}.dump.gpg" "s3://$bucket/$PROJECT/backups/landolsi_tires_${ts}.dump.gpg" --sse AES256 --only-show-errors
-          aws s3 cp "backup/landolsi_tires_${ts}.dump.gpg" "s3://$bucket/$PROJECT/backups/landolsi_tires_latest.dump.gpg" --sse AES256 --only-show-errors
-          echo "- Copie chiffrée dans \`s3://$bucket/$PROJECT/backups/\` (restaurée au prochain déploiement)" >> "$GITHUB_STEP_SUMMARY"
           echo "created=true" >> "$GITHUB_OUTPUT"
-          echo "- Archive chiffrée (GPG AES-256) : artefact \`backup-predestroy-${ts}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "TS=$ts" >> "$GITHUB_ENV"
+          echo "- Archive chiffrée (GPG AES-256, $keysrc) : artefact \`backup-predestroy-${ts}\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$users" = 0 ]; then
+            echo "::warning::Base vide : la dernière sauvegarde S3 n'est PAS remplacée."
+            echo "- Base vide : sauvegarde S3 précédente conservée" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          bucket="${PROJECT}-tfstate-$(aws sts get-caller-identity --query Account --output text)-${AWS_REGION}"
+          fp=$(ssh-keygen -lf ~/.ssh/id_ec2.pub | awk '{print $2}')
+          for name in "landolsi_tires_${ts}.dump.gpg" landolsi_tires_latest.dump.gpg; do
+            aws s3 cp "backup/landolsi_tires_${ts}.dump.gpg" "s3://$bucket/$PROJECT/backups/$name" \
+              --sse AES256 --metadata "users=$users,key=$fp" --only-show-errors
+          done
+          echo "- Copie dans \`s3://$bucket/$PROJECT/backups/landolsi_tires_latest.dump.gpg\` ($users utilisateurs) : **restaurée automatiquement au prochain déploiement**" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         if: steps.artifact.outputs.created == 'true'
