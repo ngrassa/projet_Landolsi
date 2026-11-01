@@ -175,7 +175,9 @@ jobs:
       - name: pg_dump sur le serveur (backup-db.sh, archive + SHA-256 dans /var/backups/landolsi)
         run: |
           ssh ec2 'sudo -u landolsi /opt/landolsi/current/scripts/backup-db.sh'
-          dump=$(ssh ec2 'sudo ls -1t /var/backups/landolsi/*.dump | head -1')
+          # Joker développé par root : /var/backups/landolsi est en 0700 (landolsi)
+          dump=$(ssh ec2 "sudo sh -c 'ls -1t /var/backups/landolsi/*.dump | head -1'")
+          [ -n "$dump" ] || { echo "::error::archive introuvable dans /var/backups/landolsi"; exit 1; }
           echo "DUMP=$dump" >> "$GITHUB_ENV"
           {
             echo "## D2 Sauvegarde"
