@@ -30,6 +30,7 @@ Application web responsive réalisée dans le cadre du projet de fin d'études (
 - [18. Préparer la livraison finale](#18-préparer-la-livraison-finale)
 - [19. Limites et améliorations](#19-limites-et-améliorations)
 - [20. Déploiement en production (AWS EC2 Ubuntu)](#20-déploiement-en-production-aws-ec2-ubuntu)
+- [21. Pipeline CI/CD GitHub Actions](#21-pipeline-cicd-github-actions)
 
 ## 0. Modifications apportées au projet initial
 
@@ -82,6 +83,13 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 - `scripts/install.sh`, `deploy.sh`, `rollback.sh`, `health-check.sh` ; unités `systemd/` ; site `nginx/landolsi.conf`.
 - Terraform `infra/aws/` + `infra/cloud-init/` pour une instance EC2 Ubuntu 24.04, adapté aux restrictions AWS Academy (Security Group existant, clé SSH injectée par cloud-init).
 - Documentation `docs/deployment/` : architecture, stratégie de base, sauvegarde/restauration, AWS Academy, dépannage, retour arrière.
+
+### Pipeline CI/CD GitHub Actions (1er novembre 2026)
+
+- `.github/workflows/cicd.yml` : CI (lint, tests PostgreSQL 16, build), SAST (CodeQL, Semgrep, Gitleaks), SCA (npm audit, Trivy, SBOM), IaC (Checkov, Trivy), DAST (OWASP ZAP actif sur une préproduction éphémère), puis, sur le bouton *Run workflow* : création de la VM AWS par Terraform (état S3), déploiement, tests de fumée et DAST production (ZAP baseline, Nuclei, testssl.sh).
+- `.github/workflows/destroy.yml` : bouton *Destroy* (sauvegarde pg_dump + instantané EBS, `terraform destroy`, nettoyage).
+- Corrections issues du pipeline : `setAvis` non défini (`CommandeDetails.jsx`), imports inutilisés, suppression de `jade` (inutilisé, 4 vulnérabilités critiques), `express` 4.22 et `morgan` 1.12.
+- Détails : [§21](#21-pipeline-cicd-github-actions) et [`docs/deployment/cicd-pipeline.md`](docs/deployment/cicd-pipeline.md).
 
 ### Non modifié (à traiter par l'équipe)
 
@@ -977,3 +985,23 @@ Seul `infra/aws/` est spécifique à AWS. `scripts/`, `systemd/` et `nginx/` fon
 **Projet :** LANDOLSI TIRES — plateforme web de vente de pneumatiques  
 **Cadre :** Projet de fin d'études (PFE)  
 **Langue de documentation :** français
+
+## 21. Pipeline CI/CD GitHub Actions
+
+Deux workflows, visibles dans l'onglet **Actions** du dépôt :
+
+| Workflow | Bouton | Résultat |
+|---|---|---|
+| **CI/CD — LANDOLSI TIRES** | *Run workflow* (`deploy` coché) | tests + sécurité, puis création de la VM EC2 et mise en ligne du site |
+| **Destroy — infrastructure AWS** | *Run workflow*, saisir `DESTROY` | sauvegarde, puis suppression de la VM |
+
+Un `push` ou une *pull request* exécute seulement les phases 1 à 3 (aucune ressource AWS). Le graphe du run montre les étapes dans l'ordre : `1.x` intégration continue, `2.x` sécurité statique, `3.x` DAST et porte qualité, `4.x` AWS (prérequis → Terraform → déploiement → tests de fumée → DAST production → rapport). Chaque job publie un résumé expliqué (plan Terraform, constats de sécurité, URL du site).
+
+Secrets requis : `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (à recopier à chaque session AWS Academy) et `SSH_PRIVATE_KEY`. Facultatifs : `MISTRAL_API_KEY`, `EMAIL_USER`/`EMAIL_PASS`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`, `DB_BACKUP_*`.
+
+```bash
+gh workflow run cicd.yml    --repo ngrassa/projet_Landolsi -f deploy=true      # déployer
+gh workflow run destroy.yml --repo ngrassa/projet_Landolsi -f confirm=DESTROY  # détruire
+```
+
+L'état Terraform du pipeline est stocké dans S3 (`landolsi-tires-tfstate-<compte>-<région>`), distinct de l'état local du poste d'administration : ne pas gérer la même instance des deux façons. Documentation complète : [`docs/deployment/cicd-pipeline.md`](docs/deployment/cicd-pipeline.md).

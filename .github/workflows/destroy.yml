@@ -207,6 +207,7 @@ jobs:
         env:
           DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
         run: |
+          # shellcheck disable=SC2029  # variables développées volontairement côté runner avant l'envoi par ssh
           if [ -z "$DB_BACKUP_PASSPHRASE" ]; then
             echo "::notice::DB_BACKUP_PASSPHRASE absent : pas d'archive téléchargeable (le dépôt est public, aucune donnée n'est publiée en clair)."
             echo "created=false" >> "$GITHUB_OUTPUT"
@@ -386,6 +387,7 @@ jobs:
 
       - name: Volumes orphelins du projet (information)
         run: |
+          # shellcheck disable=SC2016  # $ littéral voulu (JMESPath / SQL), pas une variable shell
           {
             echo
             echo "Volumes détachés du compte (coût de stockage) :"

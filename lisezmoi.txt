@@ -52,6 +52,18 @@ RESTE À FAIRE (détail au §5)
   [ ] e) (plus tard) secrets EC2_* pour le job restore-ec2
   [ ] Copier la phrase secrète dans un gestionnaire de mots de passe.
 
+PIPELINE CI/CD GITHUB ACTIONS (1er novembre 2026)
+- Déployer : Actions > "CI/CD — LANDOLSI TIRES" > Run workflow (deploy coché)
+    gh workflow run cicd.yml --repo ngrassa/projet_Landolsi -f deploy=true
+- Détruire  : Actions > "Destroy — infrastructure AWS" > Run workflow, saisir DESTROY
+    gh workflow run destroy.yml --repo ngrassa/projet_Landolsi -f confirm=DESTROY
+- A CHAQUE NOUVELLE SESSION DU LAB : recopier AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN dans les secrets du dépôt.
+- Etat Terraform du pipeline : bucket S3 landolsi-tires-tfstate-<compte>-us-east-1
+  (distinct de infra/aws/terraform.tfstate local). Variable de dépôt
+  EIP_ALLOCATION_ID = eipalloc-09a864995fee440c0 (même URL).
+- Détails : docs/deployment/cicd-pipeline.md et README §21.
+
 1. PRINCIPE
 -----------
 - Le dépôt GitHub est PUBLIC. La sauvegarde de la base (e-mails, téléphones,

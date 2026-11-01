@@ -101,6 +101,7 @@ jobs:
           PGPASSWORD: ci-only-password
           PGDATABASE: landolsi_tires
         run: |
+          # shellcheck disable=SC2016  # $ littéral voulu (JMESPath / SQL), pas une variable shell
           psql -v ON_ERROR_STOP=1 -c 'SELECT (SELECT count(*) FROM users) users, (SELECT count(*) FROM "Marques") marques,
             (SELECT count(*) FROM "Pneus") pneus, (SELECT count(*) FROM commandes) commandes,
             (SELECT count(*) FROM factures) factures, (SELECT count(*) FROM avis) avis'

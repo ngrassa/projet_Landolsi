@@ -2,7 +2,12 @@
 // Suffisant pour une instance unique ; avec plusieurs instances,
 // utiliser un stockage partagé ou la limitation Nginx (limit_req).
 
-function rateLimit({ windowMs = 60000, max = 15, key = "default" } = {}) {
+function rateLimit({
+    windowMs = 60000,
+    max = 15,
+    key = "default",
+    message = "Trop de requêtes vers l'assistant. Réessayez dans une minute."
+} = {}) {
     const hits = new Map();
 
     const sweeper = setInterval(() => {
@@ -24,7 +29,7 @@ function rateLimit({ windowMs = 60000, max = 15, key = "default" } = {}) {
             res.set("Retry-After", String(Math.ceil((entry.reset - now) / 1000)));
             return res.status(429).json({
                 success: false,
-                message: "Trop de requêtes vers l'assistant. Réessayez dans une minute."
+                message
             });
         }
         next();

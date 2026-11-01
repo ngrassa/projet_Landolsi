@@ -33,7 +33,8 @@ const unlessPlaceholder = (value) =>
 
 // Ancien secret codé en dur : conservé uniquement pour le développement
 // local afin de ne pas casser les sessions existantes.
-const DEV_JWT_SECRET = "net pneus secret";
+// Refusé en production par validateConfig() (secret aléatoire de 32 caractères minimum exigé).
+const DEV_JWT_SECRET = "net pneus secret"; // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret
 
 const config = {
     nodeEnv: NODE_ENV,

@@ -29,17 +29,26 @@ const encryptionKey = crypto
     .update(config.mfaEncryptionKey || `mfa:${config.jwtSecret}`)
     .digest();
 
+const GCM_TAG_LENGTH = 16;
+
 function encryptSecret(secret) {
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+    const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey, iv, {
+        authTagLength: GCM_TAG_LENGTH
+    });
+    // Faux positif Semgrep : « secret » est le paramètre chiffré ici, pas une valeur codée en dur
+    const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]); // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret
     const tag = cipher.getAuthTag();
     return [iv, tag, encrypted].map((b) => b.toString("base64")).join(":");
 }
 
 function decryptSecret(payload) {
     const [iv, tag, encrypted] = payload.split(":").map((p) => Buffer.from(p, "base64"));
-    const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey, iv);
+    // Tag GCM de 128 bits imposé : un tag tronqué (falsification facilitée) est refusé
+    if (tag.length !== GCM_TAG_LENGTH) throw new Error("tag d'authentification MFA invalide");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey, iv, {
+        authTagLength: GCM_TAG_LENGTH
+    });
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }

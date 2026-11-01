@@ -218,6 +218,7 @@ systemctl enable --now landolsi-backup.timer >/dev/null
 # 9. Nginx
 # -----------------------------------------------------
 log "Configuration de Nginx..."
+install -m 0644 "$REPO_DIR/nginx/security-headers.conf" /etc/nginx/snippets/landolsi-security-headers.conf
 install -m 0644 "$REPO_DIR/nginx/landolsi.conf" /etc/nginx/sites-available/landolsi
 ln -sfn /etc/nginx/sites-available/landolsi /etc/nginx/sites-enabled/landolsi
 rm -f /etc/nginx/sites-enabled/default   # lien symbolique uniquement; le fichier d'origine reste dans sites-available

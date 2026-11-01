@@ -326,6 +326,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Analyse Semgrep
+        # Règle exclue : node_nosqli_injection vise MongoDB. Ici Sequelize/PostgreSQL :
+        # les opérateurs sont des Symbol (Op.gt...), sans alias « $gt » ; un objet JSON
+        # reçu ne peut donc pas injecter d'opérateur (13 faux positifs analysés).
         run: |
           docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:latest \
             semgrep scan --metrics=off --disable-version-check \
@@ -333,6 +336,7 @@ jobs:
               --config p/nodejsscan --config p/react --config p/secrets \
               --config p/terraform --config p/github-actions \
               --exclude 'frontend/dist' --exclude '**/node_modules' \
+              --exclude-rule ajinabraham.njsscan.database.nosql_find_injection.node_nosqli_injection \
               --sarif-output=semgrep.sarif --json-output=semgrep.json || true
           test -s semgrep.json
 
@@ -464,22 +468,24 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Checkov (Terraform + GitHub Actions)
-        # Rapport sans blocage : certaines règles génériques ne s'appliquent pas à
-        # AWS Academy (pas de rôle IAM créable, pas de VPC dédié). Constats :
-        # Security > Code scanning. Exceptions justifiées dans infra/aws/.checkov.yaml.
+        # Bloquant. Exceptions justifiées une à une dans infra/aws/.checkov.yaml
+        # (contexte AWS Academy : pas de rôle IAM créable, serveur web public...).
         run: |
+          mkdir -p checkov-out && chmod 777 checkov-out
+          set +e
           docker run --rm -v "$PWD:/src" -w /src bridgecrew/checkov:latest \
             --config-file infra/aws/.checkov.yaml \
             -d infra/aws -d .github/workflows \
-            --output cli --output sarif --output-file-path console,/src \
-            --soft-fail | tee checkov.txt
-          mv results_sarif.sarif checkov.sarif 2>/dev/null || true
+            --output cli --output sarif --output-file-path console,checkov-out | tee checkov.txt
+          rc=${PIPESTATUS[0]}
+          set -e
           {
             echo "## 2.5 Checkov (IaC)"
             echo '```'
-            grep -E '^(terraform|github_actions) scan results:|Passed checks|Failed checks' checkov.txt | head -10
+            grep -E 'scan results:|Passed checks|FAILED for' checkov.txt | head -20
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
 
       - name: Trivy config (mauvaises configurations Terraform)
         run: |
@@ -489,9 +495,9 @@ jobs:
             --severity CRITICAL,HIGH --format table infra/aws | tee trivy-iac.txt
 
       - uses: github/codeql-action/upload-sarif@v4
-        if: always() && hashFiles('checkov.sarif') != ''
+        if: always() && hashFiles('checkov-out/results_sarif.sarif') != ''
         with:
-          sarif_file: checkov.sarif
+          sarif_file: checkov-out/results_sarif.sarif
           category: checkov
 
       - uses: github/codeql-action/upload-sarif@v4
@@ -571,6 +577,7 @@ jobs:
           sed -e 's#/opt/landolsi/current/frontend/dist#/srv/landolsi/dist#' \
               -e 's#/var/lib/landolsi/uploads/#/srv/landolsi/uploads/#' \
               nginx/landolsi.conf | sudo tee /etc/nginx/sites-available/landolsi >/dev/null
+          sudo install -m 0644 nginx/security-headers.conf /etc/nginx/snippets/landolsi-security-headers.conf
           sudo ln -sfn /etc/nginx/sites-available/landolsi /etc/nginx/sites-enabled/landolsi
           sudo rm -f /etc/nginx/sites-enabled/default
           sudo chmod -R a+rX /srv/landolsi
@@ -990,6 +997,7 @@ jobs:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
           LE_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
         run: |
+          # shellcheck disable=SC2029  # variables développées volontairement côté runner avant l'envoi par ssh
           domain_args=""
           if [ "$ENABLE_HTTPS" = true ]; then
             domain_args="--domain $DOMAIN"
@@ -1025,6 +1033,7 @@ jobs:
         env:
           SHA: ${{ github.sha }}
         run: |
+          # shellcheck disable=SC2029  # variables développées volontairement côté runner avant l'envoi par ssh
           ssh ec2 "SHA='$SHA' bash -s" <<'EOF'
           set -euo pipefail
           SRC=/opt/landolsi-src
@@ -1044,6 +1053,7 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           MISTRAL_MODEL: ${{ vars.MISTRAL_MODEL }}
         run: |
+          # shellcheck disable=SC2029  # variables développées volontairement côté runner avant l'envoi par ssh
           if [ -z "$MISTRAL_API_KEY" ]; then
             echo "::notice::MISTRAL_API_KEY absent : assistants IA désactivés (HTTP 503), le reste du site fonctionne."
             exit 0
@@ -1109,6 +1119,7 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
+          # shellcheck disable=SC2029  # variables développées volontairement côté runner avant l'envoi par ssh
           admins=$(ssh ec2 "sudo -u postgres psql -XAtd landolsi_tires -c \"SELECT count(*) FROM users WHERE role = 'admin'\"")
           if [ "$admins" != 0 ]; then echo "Administrateur(s) présent(s) : $admins"; exit 0; fi
           if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ]; then
@@ -1171,13 +1182,16 @@ jobs:
           check "Version Nginx masquée (server_tokens off)" bash -c "! curl -sI '$base/' | grep -qiE '^server: nginx/[0-9]'"
           check "En-tête X-Frame-Options" bash -c "curl -sI '$base/' | grep -qi '^x-frame-options'"
           check "En-tête Referrer-Policy" bash -c "curl -sI '$base/' | grep -qi '^referrer-policy'"
+          check "En-tête Content-Security-Policy" bash -c "curl -sI '$base/' | grep -qi \"^content-security-policy: default-src 'self'\""
+          check "En-tête Permissions-Policy" bash -c "curl -sI '$base/' | grep -qi '^permissions-policy'"
+          check "Framework masqué (pas de X-Powered-By)" bash -c "! curl -sI '$base/api/health' | grep -qi '^x-powered-by'"
           check "API Node (5001) non exposée" bash -c "! nc -z -w 5 '$EC2_HOST' 5001"
           check "PostgreSQL (5432) non exposé" bash -c "! nc -z -w 5 '$EC2_HOST' 5432"
           warn  "SSH (22) fermé à Internet après le déploiement" bash -c "! nc -z -w 5 '$EC2_HOST' 22"
           if [ "$HTTPS" = true ]; then
             check "Certificat TLS valide (chaîne Let's Encrypt)" curl -fsS --max-time 15 "$base/"
             check "Redirection HTTP -> HTTPS" bash -c "curl -sI 'http://$EC2_HOST/' | grep -qiE '^location: https://'"
-            warn  "HSTS (Strict-Transport-Security)" bash -c "curl -sI '$base/' | grep -qi '^strict-transport-security'"
+            check "HSTS (Strict-Transport-Security)" bash -c "curl -sI '$base/' | grep -qi '^strict-transport-security'"
           fi
           {
             echo "## 4.4 Tests de fumée — $URL"

@@ -13,6 +13,9 @@ const sequelize = require("./db/db");
 
 var app = express();
 
+// Ne pas révéler le framework (constat OWASP ZAP 10037)
+app.disable("x-powered-by");
+
 if (config.trustProxy) {
     // Derrière Nginx : IP client et protocole réels (X-Forwarded-*)
     app.set("trust proxy", 1);
