@@ -1301,10 +1301,17 @@ jobs:
         if: always()
         run: |
           mkdir -m 777 -p nuclei
+          # Modèles téléchargés au démarrage (dernière version) ; familles non intrusives
+          # uniquement : CVE, mauvaises configurations, expositions, TLS, technologies.
+          set +e
           docker run --rm -v "$PWD/nuclei:/out" projectdiscovery/nuclei:latest \
-            -u "$URL" -as -severity low,medium,high,critical \
-            -etags dos,fuzz,intrusive,brute-force -rl 30 -c 10 -timeout 10 \
-            -jsonl -o /out/nuclei.jsonl -silent -disable-update-check || true
+            -u "$URL" -tags cve,misconfig,exposure,ssl,tech,panel \
+            -severity low,medium,high,critical \
+            -etags dos,fuzz,intrusive,brute-force,default-login -rl 30 -c 10 -timeout 10 \
+            -jsonl -o /out/nuclei.jsonl -stats -si 60
+          rc=$?
+          set -e
+          [ "$rc" -eq 0 ] || { echo "::error::Nuclei n'a pas pu s'exécuter (code $rc)"; exit 1; }
           touch nuclei/nuclei.jsonl
           {
             echo "### Nuclei"
