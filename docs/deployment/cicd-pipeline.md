@@ -5,7 +5,7 @@ machine virtuelle AWS, puis le chemin inverse :
 
 | Workflow | Fichier | Déclenchement |
 |---|---|---|
-| **CI/CD — LANDOLSI TIRES** | `.github/workflows/cicd.yml` | push / pull request (phases 1-3) ; bouton **Run workflow** (phases 1-4) |
+| **CI/CD — LANDOLSI TIRES** | `.github/workflows/cicd.yml` | push / pull request (phases 1 et 3) ; bouton **Run workflow** (phases 1, 2, 3) |
 | **Destroy — infrastructure AWS** | `.github/workflows/destroy.yml` | bouton **Run workflow** + saisie `DESTROY` |
 
 Fichiers associés :
@@ -20,58 +20,66 @@ Fichiers associés :
 
 ## 1. Vue d'ensemble
 
+Priorité : **la VM AWS et le site en ligne d'abord**, les analyses de sécurité
+longues ensuite. Durées mesurées sur GitHub : phase 1 ≈ 1 min ; ZAP actif ≈ 4 min 30.
+
 ```
 push / PR / bouton
         │
-        ├── 1.1 Qualité ─────────┐
-        ├── 1.2 Tests (PG 16) ───┼──► 3.1 DAST préprod (ZAP actif) ──┐
-        ├── 1.3 Build ───────────┘                                   │
-        ├── 2.1 CodeQL (JS, Actions)                                 │
-        ├── 2.2 Semgrep                                              ├──► 3.2 Porte qualité & sécurité
-        ├── 2.3 Gitleaks                                             │            │ (bouton ou AUTO_DEPLOY)
-        ├── 2.4 SCA (npm audit, Trivy, SBOM)                         │            ▼
-        └── 2.5 IaC (Checkov, Trivy) ────────────────────────────────┘   4.1 AWS prérequis
-                                                                                  ▼
-                                                                         4.2 Terraform plan/apply (VM)
-                                                                                  ▼
-                                                                         4.3 Déploiement (cloud-init, HTTPS)
-                                                                                  ▼
-                                                                         4.4 Tests de fumée
-                                                                                  ▼
-                                                                         4.5 DAST production
-                                                                                  ▼
-                                                                         4.6 Rapport (URL du site)
+ PHASE 1 (≈1 min, bloquante)        PHASE 2 (bouton ou AUTO_DEPLOY)          PHASE 3 (à la fin)
+        ├── 1.1 Qualité ───┐
+        ├── 1.2 Tests ─────┤
+        ├── 1.3 Build ─────┼──► 1.5 Porte CI ──► 2.1 AWS prérequis
+        └── 1.4 Gitleaks ──┘                          ▼
+                                               2.2 Terraform (création VM)
+                                                      ▼
+                                               2.3 Déploiement (cloud-init, HTTPS)
+                                                      ▼
+                                               2.4 Tests de fumée ──────────► 3.1 CodeQL
+                                                                              3.2 Semgrep
+                                                                              3.3 SCA + SBOM
+                                                                              3.4 IaC (Checkov, Trivy)
+                                                                              3.5 DAST préprod (ZAP actif)
+                                                                              3.6 DAST prod (ZAP, Nuclei, TLS)
+                                                                                      ▼
+                                                                              3.7 Rapport final
 ```
+
+Sans déploiement (push, pull request), la phase 3 démarre dès la porte CI.
+Les analyses de la phase 3 s'exécutent même si une étape précédente a échoué
+(rapports toujours produits) ; un constat bloquant y rend le run **rouge** et
+apparaît dans le rapport final, sans retirer le site déjà en ligne.
 
 Chaque job écrit un **résumé** (onglet *Summary* du run) : tableaux de résultats,
 plan Terraform, sorties, URL. Les constats SAST/IaC/SCA sont aussi publiés au
 format SARIF dans **Security > Code scanning**.
 
-## 2. Phase 1 — Intégration continue
+## 2. Phase 1 — Intégration continue rapide (bloquante)
 
 | Job | Ce qui est vérifié | Bloquant |
 |---|---|---|
 | **1.1 Qualité** | ESLint (React) ; `node --check` sur tout le backend ; casse des imports (Windows → Linux) ; ShellCheck des scripts d'exploitation ; **actionlint** des workflows ; `terraform fmt` + `validate` | oui |
 | **1.2 Tests** | PostgreSQL 16 éphémère (service Docker) ; migrations Sequelize **deux fois** (idempotence) ; 93 tests `node:test` (configuration, API HTTP, MFA, IA, facture, photo) avec **couverture de code** et rapport JUnit ; test sauvegarde → restauration → comparaison schéma/comptages/séquences | oui |
 | **1.3 Build** | `npm ci` + build Vite avec `VITE_API_URL=/api` ; aucune URL `localhost:5001` dans le bundle ; artefact `frontend-dist` réutilisé par le DAST | oui |
+| **1.4 Secrets** | **Gitleaks** sur tout l'historique Git (clés AWS, jetons, mots de passe) | oui |
+| **1.5 Porte CI** | tableau des contrôles ; décide du lancement de la phase 2 | — |
 
 ESLint : la règle `react-hooks/set-state-in-effect` (12 composants, dette
 recensée dans `readiness-report.md`) est signalée en avertissement ; toute autre
 erreur bloque. Le premier passage a révélé un vrai bug (`setAvis` non défini
 dans `CommandeDetails.jsx`), corrigé.
 
-## 3. Phase 2 — Sécurité statique (SAST, SCA, IaC, secrets)
+## 3. Phase 3 — Analyses de sécurité statiques (après le déploiement)
 
 | Job | Outil | Cible | Politique |
 |---|---|---|---|
-| **2.1** | **CodeQL** (`security-extended`) | JavaScript/React/Node et workflows GitHub Actions (injections, XSS, SSRF, chemins, ReDoS, injection de commandes dans les workflows...) | alertes dans Code scanning |
-| **2.2** | **Semgrep** | règles OWASP Top 10, JavaScript, Node.js, nodejsscan, React, secrets, Terraform, GitHub Actions | **bloque** sur sévérité ERROR (règle MongoDB `node_nosqli_injection` exclue : faux positif avec Sequelize) |
-| **2.3** | **Gitleaks** | **tout l'historique Git** (clés AWS, jetons, mots de passe) | **bloque** au moindre secret |
-| **2.4** | **npm audit** | dépendances backend et frontend | **bloque** sur vulnérabilité haute/critique en production |
-| 2.4 | **Trivy fs** | vulnérabilités + secrets du dépôt | rapport SARIF |
-| 2.4 | **SBOM CycloneDX** | inventaire des composants | artefact `sbom-cyclonedx` |
-| **2.5** | **Checkov** | Terraform + workflows | **bloquant** (7 exceptions justifiées une à une dans `infra/aws/.checkov.yaml`) |
-| 2.5 | **Trivy config** | Terraform | rapport SARIF |
+| **3.1** | **CodeQL** (`security-extended`) | JavaScript/React/Node et workflows GitHub Actions (injections, XSS, SSRF, chemins, ReDoS, injection de commandes dans les workflows...) | alertes dans Code scanning |
+| **3.2** | **Semgrep** | règles OWASP Top 10, JavaScript, Node.js, nodejsscan, React, secrets, Terraform, GitHub Actions | **bloque** sur sévérité ERROR (règle MongoDB `node_nosqli_injection` exclue : faux positif avec Sequelize) |
+| **3.3** | **npm audit** | dépendances backend et frontend | **bloque** sur vulnérabilité haute/critique en production |
+| 3.3 | **Trivy fs** | vulnérabilités + secrets du dépôt | rapport SARIF |
+| 3.3 | **SBOM CycloneDX** | inventaire des composants | artefact `sbom-cyclonedx` |
+| **3.4** | **Checkov** | Terraform + workflows | **bloquant** (7 exceptions justifiées une à une dans `infra/aws/.checkov.yaml`) |
+| 3.4 | **Trivy config** | Terraform | rapport SARIF |
 
 Le premier passage de la SCA a trouvé **4 vulnérabilités critiques** et 9 hautes
 dans le backend : `jade` (moteur de vues inutilisé) supprimé, `express` 4.16 → 4.22
@@ -93,9 +101,9 @@ Faux positifs analysés et documentés : `node_nosqli_injection` (MongoDB, 13), 
 (secret de développement refusé en production, nom de paramètre), alertes CodeQL sur les
 cookies (`httpOnly` et `secure` sont fixés par `cookieOptions()`).
 
-## 4. Phase 3 — DAST avant production
+## 4. Phase 3 — DAST préproduction (3.5)
 
-**3.1 DAST préproduction** reconstruit l'architecture de production **dans le
+**3.5 DAST préproduction** reconstruit l'architecture de production **dans le
 runner** : PostgreSQL 16, API Node en `NODE_ENV=production`, Nginx avec le
 fichier réel `nginx/landolsi.conf`, frontend issu du job Build. OWASP ZAP lance
 ensuite un **scan complet actif** (spider, AJAX spider pour la SPA React,
@@ -104,12 +112,11 @@ faites ici, sur une base jetable, jamais sur la production.
 Porte : **aucune alerte de risque élevé**. Rapports HTML/JSON/Markdown dans
 l'artefact `zap-preproduction`.
 
-**3.2 Porte qualité & sécurité** : tableau de tous les contrôles ; si un seul
-échoue, la phase 4 ne démarre pas.
+Il s'exécute à la fin (après la mise en ligne) car c'est l'analyse la plus longue.
 
-## 5. Phase 4 — Déploiement continu sur AWS (création de la VM → site en ligne)
+## 5. Phase 2 — Création de la VM et déploiement (prioritaire)
 
-### 4.1 Prérequis AWS (AWS CLI)
+### 2.1 Prérequis AWS (AWS CLI)
 1. `sts get-caller-identity` : message explicite si la session AWS Academy a expiré.
 2. `run-instances --dry-run` : le compte peut-il lancer une instance ?
 3. **Bucket S3 de l'état Terraform** `landolsi-tires-tfstate-<compte>-<région>` :
@@ -125,7 +132,7 @@ l'artefact `zap-preproduction`.
    injectée par cloud-init (`ImportKeyPair` est interdit dans le lab).
 7. Écriture de `ci.auto.tfvars.json` dans le bucket (réutilisé par Destroy).
 
-### 4.2 Terraform
+### 2.2 Terraform
 `init` (backend S3, verrou `use_lockfile`) → `validate` → import des règles
 déjà présentes dans le Security Group → `plan` (affiché dans le résumé) →
 **garde-fou** : échec si le plan détruit ou remplace l'instance (sa base
@@ -135,7 +142,7 @@ volume racine) → attente de l'état `running`.
 Ressources créées : instance EC2 Ubuntu 24.04 (IMDSv2 obligatoire, volume gp3
 chiffré), règles HTTP/HTTPS/SSH du Security Group, association de l'IP élastique.
 
-### 4.3 Déploiement applicatif
+### 2.3 Déploiement applicatif
 1. **SSH juste-à-temps** : le port 22 n'est ouvert qu'à l'IP `/32` du runner,
    le temps du job, puis refermé (`if: always()`). Par défaut, SSH est fermé
    à Internet (`ADMIN_SSH_CIDR` absent = `127.0.0.1/32`).
@@ -156,20 +163,20 @@ chiffré), règles HTTP/HTTPS/SSH du Security Group, association de l'IP élasti
    `DB_BACKUP_URL`/`DB_BACKUP_PASSPHRASE` (restauration seulement sur base vide).
 7. `health-check.sh` (API, Nginx, frontend, certificat) et état des services.
 
-### 4.4 Tests de fumée (depuis Internet)
+### 2.4 Tests de fumée (depuis Internet)
 Page d'accueil, `/api/health` (base up), catalogue, route admin → 401, 404 sans
 pile d'erreur, en-têtes de sécurité, version Nginx masquée, **ports 5001 et 5432
 fermés**, SSH fermé après le job, certificat valide, redirection HTTP → HTTPS, HSTS
 (avertissement).
 
-### 4.5 DAST production (non intrusif)
+### 3.6 DAST production (non intrusif)
 - **OWASP ZAP baseline** : analyse passive (aucune attaque) ;
 - **Nuclei** : CVE, expositions, mauvaises configurations, modèles intrusifs exclus ;
 - **testssl.sh** : protocoles, suites de chiffrement, vulnérabilités TLS (Heartbleed, ROBOT...).
 Porte : aucune alerte élevée ZAP, aucun constat Nuclei high/critical, aucun constat TLS critique.
 
-### 4.6 Rapport
-URL du site, instance, IP, résultat de chaque étape.
+### 3.7 Rapport final
+URL du site, instance, IP, résultat de chaque étape des trois phases.
 
 ## 6. Pipeline Destroy (chemin inverse)
 

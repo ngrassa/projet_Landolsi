@@ -86,7 +86,7 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 
 ### Pipeline CI/CD GitHub Actions (1er novembre 2026)
 
-- `.github/workflows/cicd.yml` : CI (lint, tests PostgreSQL 16, build), SAST (CodeQL, Semgrep, Gitleaks), SCA (npm audit, Trivy, SBOM), IaC (Checkov, Trivy), DAST (OWASP ZAP actif sur une préproduction éphémère), puis, sur le bouton *Run workflow* : création de la VM AWS par Terraform (état S3), déploiement, tests de fumée et DAST production (ZAP baseline, Nuclei, testssl.sh).
+- `.github/workflows/cicd.yml` : CI rapide (lint, tests PostgreSQL 16, build, Gitleaks), puis, sur le bouton *Run workflow* : création de la VM AWS par Terraform (état S3), déploiement et tests de fumée ; enfin les analyses longues : SAST (CodeQL, Semgrep), SCA (npm audit, Trivy, SBOM), IaC (Checkov, Trivy), DAST (OWASP ZAP actif sur une préproduction éphémère, ZAP baseline, Nuclei, testssl.sh sur la production).
 - `.github/workflows/destroy.yml` : bouton *Destroy* (sauvegarde pg_dump + instantané EBS, `terraform destroy`, nettoyage).
 - Corrections issues du pipeline : `setAvis` non défini (`CommandeDetails.jsx`), imports inutilisés, suppression de `jade` (inutilisé, 4 vulnérabilités critiques), `express` 4.22 et `morgan` 1.12.
 - Détails : [§21](#21-pipeline-cicd-github-actions) et [`docs/deployment/cicd-pipeline.md`](docs/deployment/cicd-pipeline.md).
@@ -995,7 +995,7 @@ Deux workflows, visibles dans l'onglet **Actions** du dépôt :
 | **CI/CD — LANDOLSI TIRES** | *Run workflow* (`deploy` coché) | tests + sécurité, puis création de la VM EC2 et mise en ligne du site |
 | **Destroy — infrastructure AWS** | *Run workflow*, saisir `DESTROY` | sauvegarde, puis suppression de la VM |
 
-Un `push` ou une *pull request* exécute seulement les phases 1 à 3 (aucune ressource AWS). Le graphe du run montre les étapes dans l'ordre : `1.x` intégration continue, `2.x` sécurité statique, `3.x` DAST et porte qualité, `4.x` AWS (prérequis → Terraform → déploiement → tests de fumée → DAST production → rapport). Chaque job publie un résumé expliqué (plan Terraform, constats de sécurité, URL du site).
+Priorité à la mise en ligne : `1.x` intégration continue rapide et bloquante (≈ 1 min : lint, tests PostgreSQL, build, Gitleaks), `2.x` création de la VM et déploiement (prérequis AWS → Terraform → déploiement → tests de fumée), puis `3.x` analyses longues à la fin (CodeQL, Semgrep, SCA/SBOM, IaC, OWASP ZAP actif sur une préproduction éphémère, DAST production, rapport final). Un `push` ou une *pull request* exécute les phases 1 et 3 (aucune ressource AWS). Chaque job publie un résumé expliqué (plan Terraform, constats de sécurité, URL du site).
 
 Secrets requis : `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (à recopier à chaque session AWS Academy) et `SSH_PRIVATE_KEY`. Facultatifs : `MISTRAL_API_KEY`, `EMAIL_USER`/`EMAIL_PASS`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`, `DB_BACKUP_*`.
 

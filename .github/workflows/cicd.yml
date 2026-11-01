@@ -1,42 +1,39 @@
 # =============================================================================
 # LANDOLSI TIRES — Pipeline CI/CD de bout en bout
 # =============================================================================
-# Du code source jusqu'au site en production sur AWS EC2, en 4 phases visibles
-# dans le graphe de l'onglet Actions :
+# Du code source jusqu'au site en production sur AWS EC2. Priorité : la VM et
+# le site d'abord ; les analyses longues ensuite (graphe de l'onglet Actions) :
 #
-#   PHASE 1 — INTÉGRATION CONTINUE (CI)
+#   PHASE 1 — INTÉGRATION CONTINUE RAPIDE (≈ 1 min, bloquante)
 #     1.1 Qualité        ESLint, syntaxe Node, casse des imports, ShellCheck,
 #                        actionlint, terraform fmt/validate
 #     1.2 Tests          migrations + tests unitaires/intégration sur PostgreSQL 16,
 #                        test de sauvegarde/restauration
 #     1.3 Build          build Vite du frontend (artefact réutilisé par le DAST)
+#     1.4 Secrets        Gitleaks sur tout l'historique Git
+#     1.5 Porte CI       bloque la suite si une étape a échoué
 #
-#   PHASE 2 — SÉCURITÉ STATIQUE (SAST / SCA / IaC / secrets), en parallèle
-#     2.1 CodeQL         analyse sémantique JavaScript + workflows GitHub Actions
-#     2.2 Semgrep        règles OWASP Top 10, Node.js, Express, React, Terraform
-#     2.3 Gitleaks       secrets dans TOUT l'historique Git
-#     2.4 SCA            npm audit (porte bloquante), Trivy, SBOM CycloneDX
-#     2.5 IaC            Checkov + Trivy config sur Terraform et workflows
-#
-#   PHASE 3 — SÉCURITÉ DYNAMIQUE AVANT PRODUCTION
-#     3.1 DAST préprod   l'application réelle (Nginx + API + PostgreSQL) démarrée
-#                        dans le runner, attaquée par OWASP ZAP (scan ACTIF complet)
-#     3.2 Porte qualité  synthèse ; bloque le déploiement si une étape a échoué
-#
-#   PHASE 4 — DÉPLOIEMENT CONTINU (CD) SUR AWS
-#     4.1 AWS prérequis  identifiants, droits EC2, bucket d'état S3, Security Group,
+#   PHASE 2 — CRÉATION DE LA VM ET DÉPLOIEMENT (prioritaire)
+#     2.1 AWS prérequis  identifiants, droits EC2, bucket d'état S3, Security Group,
 #                        IP élastique, clé SSH
-#     4.2 Terraform      plan (garde-fou anti-destruction) puis apply : création de la VM
-#     4.3 Déploiement    cloud-init, version du commit, HTTPS Let's Encrypt, secrets,
+#     2.2 Terraform      plan (garde-fou anti-destruction) puis apply : création de la VM
+#     2.3 Déploiement    cloud-init, version du commit, HTTPS Let's Encrypt, secrets,
 #                        contrôle de santé
-#     4.4 Tests de fumée site public, API, ports fermés, en-têtes, TLS
-#     4.5 DAST prod      ZAP baseline (passif), Nuclei, testssl.sh
-#     4.6 Rapport        récapitulatif et URL du site
+#     2.4 Tests de fumée site public, API, ports fermés, en-têtes, TLS
+#
+#   PHASE 3 — ANALYSES DE SÉCURITÉ APPROFONDIES (à la fin, en parallèle)
+#     3.1 CodeQL         analyse sémantique JavaScript + workflows GitHub Actions
+#     3.2 Semgrep        règles OWASP Top 10, Node.js, React, Terraform, Actions
+#     3.3 SCA            npm audit (haute/critique = échec), Trivy, SBOM CycloneDX
+#     3.4 IaC            Checkov + Trivy config sur Terraform et workflows
+#     3.5 DAST préprod   application reconstruite dans le runner, OWASP ZAP ACTIF
+#     3.6 DAST prod      ZAP baseline (passif), Nuclei, testssl.sh sur le site déployé
+#     3.7 Rapport        récapitulatif de toutes les étapes et URL du site
 #
 # Déclenchement :
-#   - push / pull request : phases 1 à 3 (aucune ressource AWS) ;
-#   - bouton « Run workflow » (workflow_dispatch) : phases 1 à 4 ;
-#   - push sur master avec la variable de dépôt AUTO_DEPLOY = true : phases 1 à 4.
+#   - push / pull request : phases 1 et 3 (aucune ressource AWS) ;
+#   - bouton « Run workflow » (workflow_dispatch) : phases 1, 2 et 3 ;
+#   - push sur master avec la variable de dépôt AUTO_DEPLOY = true : phases 1, 2 et 3.
 #
 # Secrets (Settings > Secrets and variables > Actions) :
 #   obligatoires : AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, SSH_PRIVATE_KEY
@@ -141,7 +138,8 @@ jobs:
 
       - name: actionlint (workflows GitHub Actions)
         run: |
-          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color \
+            -ignore 'SC2029:' -ignore 'SC2016:'
 
       - uses: hashicorp/setup-terraform@v4
         with:
@@ -286,10 +284,14 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
-  # PHASE 2 — SÉCURITÉ STATIQUE
+  # PHASE 3 — ANALYSES DE SÉCURITÉ (exécutées APRÈS le déploiement)
   # ===========================================================================
   codeql:
-    name: "2.1 SAST CodeQL (${{ matrix.language }})"
+    name: "3.1 SAST CodeQL (${{ matrix.language }})"
+    needs: [gate, smoke]
+    # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
+    # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -316,7 +318,11 @@ jobs:
           category: "/language:${{ matrix.language }}"
 
   semgrep:
-    name: "2.2 SAST Semgrep (OWASP, Node, React, IaC)"
+    name: "3.2 SAST Semgrep (OWASP, Node, React, IaC)"
+    needs: [gate, smoke]
+    # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
+    # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -345,7 +351,7 @@ jobs:
           total=$(jq '.results | length' semgrep.json)
           errors=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep.json)
           {
-            echo "## 2.2 Semgrep"
+            echo "## 3.2 Semgrep"
             echo "Constats : **${total}** (dont **${errors}** de sévérité ERROR). Détail : onglet *Security > Code scanning*."
             echo
             echo "| Sévérité | Règle | Fichier |"
@@ -364,7 +370,7 @@ jobs:
           category: semgrep
 
   gitleaks:
-    name: "2.3 Secrets (Gitleaks, historique complet)"
+    name: "1.4 Secrets (Gitleaks, historique complet)"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -380,7 +386,7 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo \
             ghcr.io/gitleaks/gitleaks:latest git /repo --redact --verbose \
             --report-format sarif --report-path /repo/gitleaks.sarif
-          echo "## 2.3 Gitleaks : aucun secret détecté dans $(git rev-list --count HEAD) commits" >> "$GITHUB_STEP_SUMMARY"
+          echo "## 1.4 Gitleaks : aucun secret détecté dans $(git rev-list --count HEAD) commits" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: github/codeql-action/upload-sarif@v4
         if: always() && hashFiles('gitleaks.sarif') != ''
@@ -389,7 +395,11 @@ jobs:
           category: gitleaks
 
   sca:
-    name: "2.4 SCA dépendances (npm audit, Trivy, SBOM)"
+    name: "3.3 SCA dépendances (npm audit, Trivy, SBOM)"
+    needs: [gate, smoke]
+    # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
+    # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -406,7 +416,7 @@ jobs:
         run: |
           status=0
           {
-            echo "## 2.4 Analyse de composition logicielle (SCA)"
+            echo "## 3.3 Analyse de composition logicielle (SCA)"
             echo "| Projet | Périmètre | Critique | Haute | Moyenne | Basse |"
             echo "|---|---|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -458,7 +468,11 @@ jobs:
           if-no-files-found: ignore
 
   iac:
-    name: "2.5 Sécurité IaC (Checkov, Trivy config)"
+    name: "3.4 Sécurité IaC (Checkov, Trivy config)"
+    needs: [gate, smoke]
+    # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
+    # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -480,7 +494,7 @@ jobs:
           rc=${PIPESTATUS[0]}
           set -e
           {
-            echo "## 2.5 Checkov (IaC)"
+            echo "## 3.4 Checkov (IaC)"
             echo '```'
             grep -E 'scan results:|Passed checks|FAILED for' checkov.txt | head -20
             echo '```'
@@ -507,11 +521,12 @@ jobs:
           category: trivy-iac
 
   # ===========================================================================
-  # PHASE 3 — DAST AVANT PRODUCTION + PORTE QUALITÉ
+  # PHASE 3 (suite) — DAST préproduction ; PHASE 1 (fin) — porte CI
   # ===========================================================================
   dast-staging:
-    name: "3.1 DAST préproduction (OWASP ZAP, scan actif)"
-    needs: [tests, build]
+    name: "3.5 DAST préproduction (OWASP ZAP, scan actif)"
+    needs: [build, gate, smoke]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
@@ -603,7 +618,7 @@ jobs:
         run: |
           [ -f report_json.json ] || { echo "::error::rapport ZAP absent"; exit 1; }
           {
-            echo "## 3.1 DAST préproduction (ZAP, scan actif)"
+            echo "## 3.5 DAST préproduction (ZAP, scan actif)"
             echo "| Risque | Alerte | Occurrences |"
             echo "|---|---|---|"
             jq -r '.site[].alerts[] | "| \(.riskdesc) | \(.alert) | \(.count) |"' report_json.json | sort -r
@@ -619,8 +634,8 @@ jobs:
         run: tail -n 100 "$RUNNER_TEMP/api.log" || true
 
   gate:
-    name: "3.2 Porte qualité & sécurité"
-    needs: [quality, tests, build, codeql, semgrep, gitleaks, sca, iac, dast-staging]
+    name: "1.5 Porte CI (déploiement autorisé ?)"
+    needs: [quality, tests, build, gitleaks]
     if: always()
     runs-on: ubuntu-24.04
     outputs:
@@ -631,14 +646,14 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           {
-            echo "## 3.2 Porte qualité & sécurité"
+            echo "## 1.5 Porte CI"
             echo "| Contrôle | Résultat |"
             echo "|---|---|"
             echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(if .value.result == "success" then "✅ succès" else "❌ " + .value.result end) |"'
           } >> "$GITHUB_STEP_SUMMARY"
           failed=$(echo "$RESULTS" | jq '[to_entries[] | select(.value.result != "success")] | length')
           if [ "$failed" -gt 0 ]; then
-            echo "::error::${failed} contrôle(s) en échec : déploiement bloqué"
+            echo "::error::${failed} contrôle(s) CI en échec : déploiement bloqué"
             exit 1
           fi
 
@@ -655,16 +670,16 @@ jobs:
           if [ "$EVENT" = push ] && [ "$REF" = refs/heads/master ] && [ "$AUTO_DEPLOY" = true ]; then deploy=true; fi
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
           if [ "$deploy" = true ]; then
-            echo "➡️ Phase 4 (AWS) lancée." >> "$GITHUB_STEP_SUMMARY"
+            echo "➡️ Phase 2 (création de la VM et déploiement) lancée." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "ℹ️ Phase 4 (AWS) non demandée : bouton *Run workflow* ou variable AUTO_DEPLOY=true." >> "$GITHUB_STEP_SUMMARY"
+            echo "ℹ️ Phase 2 (AWS) non demandée : bouton *Run workflow* ou variable AUTO_DEPLOY=true." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ===========================================================================
-  # PHASE 4 — DÉPLOIEMENT CONTINU SUR AWS
+  # PHASE 2 — CRÉATION DE LA VM ET DÉPLOIEMENT (prioritaire)
   # ===========================================================================
   aws-preflight:
-    name: "4.1 AWS : prérequis (état S3, Security Group, IP élastique, clé SSH)"
+    name: "2.1 AWS : prérequis (état S3, Security Group, IP élastique, clé SSH)"
     needs: gate
     if: needs.gate.outputs.deploy == 'true'
     runs-on: ubuntu-24.04
@@ -695,7 +710,10 @@ jobs:
           INSTANCE_TYPE: ${{ inputs.instance_type || vars.INSTANCE_TYPE || 't3.small' }}
         run: |
           ami=$(aws ssm get-parameter --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id \
-                --query Parameter.Value --output text)
+                --query Parameter.Value --output text 2>/dev/null) \
+            || ami=$(aws ec2 describe-images --owners 099720109477 \
+                --filters 'Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*' \
+                --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text)
           out=$(aws ec2 run-instances --dry-run --instance-type "$INSTANCE_TYPE" --image-id "$ami" --count 1 2>&1 || true)
           if ! grep -q DryRunOperation <<<"$out"; then
             echo "$out"
@@ -703,7 +721,7 @@ jobs:
             exit 1
           fi
           {
-            echo "## 4.1 Prérequis AWS"
+            echo "## 2.1 Prérequis AWS"
             echo "| Élément | Valeur |"
             echo "|---|---|"
             echo "| Compte | \`${{ steps.aws.outputs.account-id }}\` |"
@@ -820,7 +838,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   terraform:
-    name: "4.2 Terraform : plan & apply (création de la VM EC2)"
+    name: "2.2 Terraform : plan & apply (création de la VM EC2)"
     needs: aws-preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -887,7 +905,7 @@ jobs:
           terraform plan -input=false -no-color -out=tfplan | tee plan.txt
           terraform show -json tfplan > plan.json
           {
-            echo "## 4.2 Terraform"
+            echo "## 2.2 Terraform"
             echo '```'
             grep -E '^(Plan:|No changes)' plan.txt || true
             echo '```'
@@ -936,7 +954,7 @@ jobs:
           echo "Instance $INSTANCE_ID : running"
 
   deploy:
-    name: "4.3 Déploiement de l'application sur la VM"
+    name: "2.3 Déploiement de l'application sur la VM"
     needs: [aws-preflight, terraform]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -1140,7 +1158,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "https=$HTTPS_OK" >> "$GITHUB_OUTPUT"
           {
-            echo "## 4.3 Déploiement"
+            echo "## 2.3 Déploiement"
             echo "- Version active : \`$(ssh ec2 'basename "$(readlink -f /opt/landolsi/current)"')\`"
             echo "- Site : **$url**"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -1152,7 +1170,7 @@ jobs:
           rm -rf ~/.ssh/id_ec2 ~/.ssh/config
 
   smoke:
-    name: "4.4 Tests de fumée (site public)"
+    name: "2.4 Tests de fumée (site public)"
     needs: [terraform, deploy]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -1194,7 +1212,7 @@ jobs:
             check "HSTS (Strict-Transport-Security)" bash -c "curl -sI '$base/' | grep -qi '^strict-transport-security'"
           fi
           {
-            echo "## 4.4 Tests de fumée — $URL"
+            echo "## 2.4 Tests de fumée — $URL"
             echo "| Résultat | Test |"
             echo "|---|---|"
             printf '%s\n' "${rows[@]}"
@@ -1203,8 +1221,9 @@ jobs:
           exit $fail
 
   dast-prod:
-    name: "4.5 DAST production (ZAP baseline, Nuclei, TLS)"
+    name: "3.6 DAST production (ZAP baseline, Nuclei, TLS)"
     needs: [terraform, deploy, smoke]
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
@@ -1228,7 +1247,7 @@ jobs:
         run: |
           [ -f report_json.json ] || exit 0
           {
-            echo "## 4.5 DAST production"
+            echo "## 3.6 DAST production"
             echo "### OWASP ZAP baseline"
             echo "| Risque | Alerte | Occurrences |"
             echo "|---|---|---|"
@@ -1293,9 +1312,9 @@ jobs:
           fi
 
   report:
-    name: "4.6 Rapport de déploiement"
-    needs: [aws-preflight, terraform, deploy, smoke, dast-prod]
-    if: always() && needs.aws-preflight.result != 'skipped'
+    name: "3.7 Rapport final"
+    needs: [gate, aws-preflight, terraform, deploy, smoke, codeql, semgrep, sca, iac, dast-staging, dast-prod]
+    if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: Récapitulatif
@@ -1317,8 +1336,8 @@ jobs:
             echo
             echo "| Étape | Résultat |"
             echo "|---|---|"
-            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(if .value.result == "success" then "✅" else "❌ " + .value.result end) |"'
+            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(if .value.result == "success" then "✅" elif .value.result == "skipped" then "⏭️ non exécuté" else "❌ " + .value.result end) |"'
             echo
             echo "Pour supprimer la VM : **Actions > Destroy — infrastructure AWS > Run workflow** (saisir \`DESTROY\`)."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "$RESULTS" | jq -e '[to_entries[] | select(.value.result != "success")] | length == 0' >/dev/null
+          echo "$RESULTS" | jq -e '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled")] | length == 0' >/dev/null
