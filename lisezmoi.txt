@@ -63,6 +63,16 @@ PIPELINE CI/CD GITHUB ACTIONS (1er novembre 2026)
   (distinct de infra/aws/terraform.tfstate local). Variable de dépôt
   EIP_ALLOCATION_ID = eipalloc-09a864995fee440c0 (même URL).
 - Détails : docs/deployment/cicd-pipeline.md et README §21.
+- 01/11 ~16h UTC : cycle complet testé par le pipeline : Destroy (sauvegarde
+  chiffrée dans S3 + instantané EBS, instance terminée) puis CI/CD (nouvelle VM,
+  HTTPS, base RESTAURÉE automatiquement depuis S3 : 14 utilisateurs, 9 pneus,
+  43 commandes). Site en ligne : https://landolsi-tires-54-146-95-182.sslip.io
+- Sauvegardes du pipeline : s3://landolsi-tires-tfstate-<compte>-us-east-1/
+  landolsi-tires/backups/landolsi_tires_latest.dump.gpg, chiffrées avec une clé
+  dérivée de la clé SSH du secret SSH_PRIVATE_KEY (.github/scripts/backup-key.sh)
+  ou DB_BACKUP_PASSPHRASE s'il est créé. CONSERVER la clé privée correspondante.
+- Variables ADMIN_SSH_CIDR (197.1.203.144/32) et ADMIN_SSH_PUBLIC_KEY
+  (landolsi_ec2_ed25519.pub) : SSH administrateur ; mettre à jour l'IP si elle change.
 
 1. PRINCIPE
 -----------
