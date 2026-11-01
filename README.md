@@ -86,9 +86,10 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 
 ### Pipeline CI/CD GitHub Actions (1er novembre 2026)
 
-- `.github/workflows/cicd.yml` : CI rapide (lint, tests PostgreSQL 16, build, Gitleaks), puis, sur le bouton *Run workflow* : création de la VM AWS par Terraform (état S3), déploiement et tests de fumée ; enfin les analyses longues : SAST (CodeQL, Semgrep), SCA (npm audit, Trivy, SBOM), IaC (Checkov, Trivy), DAST (OWASP ZAP actif sur une préproduction éphémère). La base est restaurée automatiquement après le déploiement (sauvegarde S3 chiffrée déposée par Destroy).
+- `.github/workflows/cicd.yml` : CI rapide (lint, tests PostgreSQL 16, build, Gitleaks), puis, si le titre du commit contient `[deploy]` (ou sur le bouton *Run workflow*) : création de la VM AWS par Terraform (état S3), déploiement et tests de fumée ; enfin les analyses longues : SAST (CodeQL, Semgrep), SCA (npm audit, Trivy, SBOM), IaC (Checkov, Trivy), DAST (OWASP ZAP actif sur une préproduction éphémère). La base est restaurée automatiquement après le déploiement (sauvegarde S3 chiffrée déposée par Destroy).
 - `.github/workflows/destroy.yml` : bouton *Destroy* (sauvegarde pg_dump + instantané EBS, `terraform destroy`, nettoyage).
 - Corrections issues du pipeline : `setAvis` non défini (`CommandeDetails.jsx`), imports inutilisés, suppression de `jade` (inutilisé, 4 vulnérabilités critiques), `express` 4.22 et `morgan` 1.12.
+- Déclenchement : un `push` ne lance rien sauf `[deploy]` (complet) ou `[ci]` (sans AWS) dans le titre du commit ; plus de déclenchement sur *pull request*.
 - Détails : [§21](#21-pipeline-cicd-github-actions) et [`docs/deployment/cicd-pipeline.md`](docs/deployment/cicd-pipeline.md).
 
 ### Non modifié (à traiter par l'équipe)
@@ -988,14 +989,14 @@ Seul `infra/aws/` est spécifique à AWS. `scripts/`, `systemd/` et `nginx/` fon
 
 ## 21. Pipeline CI/CD GitHub Actions
 
-Deux workflows, visibles dans l'onglet **Actions** du dépôt :
+Deux workflows, visibles dans l'onglet **Actions** du dépôt. Un `push` sans marqueur dans le titre du commit ne lance **aucun** pipeline :
 
 | Workflow | Bouton | Résultat |
 |---|---|---|
-| **CI/CD — LANDOLSI TIRES** | *Run workflow* (`deploy` coché) | tests + sécurité, puis création de la VM EC2 et mise en ligne du site |
+| **CI/CD — LANDOLSI TIRES** | `[deploy]` dans le titre du commit, ou *Run workflow* (`deploy` coché) | tests + sécurité, puis création de la VM EC2 et mise en ligne du site |
 | **Destroy — infrastructure AWS** | *Run workflow*, saisir `DESTROY` | sauvegarde, puis suppression de la VM |
 
-Priorité à la mise en ligne : `1.x` intégration continue rapide et bloquante (≈ 1 min : lint, tests PostgreSQL, build, Gitleaks), `2.x` création de la VM et déploiement (prérequis AWS → Terraform → déploiement → tests de fumée), puis `3.x` analyses longues à la fin (CodeQL, Semgrep, SCA/SBOM, IaC, OWASP ZAP actif sur une préproduction éphémère, rapport final). La base est restaurée dans la foulée du déploiement depuis la sauvegarde S3 chiffrée déposée par Destroy. Un `push` ou une *pull request* exécute les phases 1 et 3 (aucune ressource AWS). Chaque job publie un résumé expliqué (plan Terraform, constats de sécurité, URL du site).
+Priorité à la mise en ligne : `1.x` intégration continue rapide et bloquante (≈ 1 min : lint, tests PostgreSQL, build, Gitleaks), `2.x` création de la VM et déploiement (prérequis AWS → Terraform → déploiement → tests de fumée), puis `3.x` analyses longues à la fin (CodeQL, Semgrep, SCA/SBOM, IaC, OWASP ZAP actif sur une préproduction éphémère, rapport final). La base est restaurée dans la foulée du déploiement depuis la sauvegarde S3 chiffrée déposée par Destroy. Avec `[ci]` dans le titre du commit, seules les phases 1 et 3 s'exécutent (aucune ressource AWS). Chaque job publie un résumé expliqué (plan Terraform, constats de sécurité, URL du site).
 
 Secrets requis : `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (à recopier à chaque session AWS Academy) et `SSH_PRIVATE_KEY`. Facultatifs : `MISTRAL_API_KEY`, `EMAIL_USER`/`EMAIL_PASS`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`, `DB_BACKUP_*`.
 
