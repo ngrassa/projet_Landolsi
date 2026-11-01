@@ -32,7 +32,8 @@ function CommandeDetails() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    //const [avis, setAvis] = useState(null);
+    // Avis global de la commande : seul le setter est utilisé (affichage par pneu via avisParPneu)
+    const [, setAvis] = useState(null);
      const [avisParPneu, setAvisParPneu] = useState({});
 
     // ========================================

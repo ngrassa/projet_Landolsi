@@ -1,0 +1,12 @@
+# Configuration Checkov (job « 2.5 Sécurité IaC » du pipeline CI/CD).
+# Exceptions JUSTIFIÉES par le contexte AWS Academy / instance unique ;
+# toutes les autres règles restent actives et visibles dans Security > Code scanning.
+compact: true
+quiet: true
+skip-check:
+  # Profil IAM : création de rôles interdite dans AWS Academy (LabInstanceProfile facultatif)
+  - CKV2_AWS_41
+  # Surveillance détaillée CloudWatch (payante) : non nécessaire pour un PFE
+  - CKV_AWS_126
+  # HTTP/HTTPS publics : site web ouvert à Internet par nature (port 80 redirigé vers 443)
+  - CKV_AWS_260

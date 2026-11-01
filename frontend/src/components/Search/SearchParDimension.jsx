@@ -13,8 +13,7 @@ import { useState, useEffect } from "react";
 import {
     getLargeurs,
     getHauteurs,
-    getDiametres,
-    searchPneusByDimension
+    getDiametres
 } from "../../services/pneuApi";
 
 

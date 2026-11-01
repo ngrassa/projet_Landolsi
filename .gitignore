@@ -28,3 +28,7 @@ backups/
 
 # Journaux
 *.log
+
+# Fichiers générés dans le runner par le pipeline CI/CD (backend S3, variables)
+infra/aws/ci_backend_override.tf
+infra/aws/ci.auto.tfvars.json

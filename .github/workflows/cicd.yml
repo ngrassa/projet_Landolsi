@@ -1,0 +1,1310 @@
+# =============================================================================
+# LANDOLSI TIRES — Pipeline CI/CD de bout en bout
+# =============================================================================
+# Du code source jusqu'au site en production sur AWS EC2, en 4 phases visibles
+# dans le graphe de l'onglet Actions :
+#
+#   PHASE 1 — INTÉGRATION CONTINUE (CI)
+#     1.1 Qualité        ESLint, syntaxe Node, casse des imports, ShellCheck,
+#                        actionlint, terraform fmt/validate
+#     1.2 Tests          migrations + tests unitaires/intégration sur PostgreSQL 16,
+#                        test de sauvegarde/restauration
+#     1.3 Build          build Vite du frontend (artefact réutilisé par le DAST)
+#
+#   PHASE 2 — SÉCURITÉ STATIQUE (SAST / SCA / IaC / secrets), en parallèle
+#     2.1 CodeQL         analyse sémantique JavaScript + workflows GitHub Actions
+#     2.2 Semgrep        règles OWASP Top 10, Node.js, Express, React, Terraform
+#     2.3 Gitleaks       secrets dans TOUT l'historique Git
+#     2.4 SCA            npm audit (porte bloquante), Trivy, SBOM CycloneDX
+#     2.5 IaC            Checkov + Trivy config sur Terraform et workflows
+#
+#   PHASE 3 — SÉCURITÉ DYNAMIQUE AVANT PRODUCTION
+#     3.1 DAST préprod   l'application réelle (Nginx + API + PostgreSQL) démarrée
+#                        dans le runner, attaquée par OWASP ZAP (scan ACTIF complet)
+#     3.2 Porte qualité  synthèse ; bloque le déploiement si une étape a échoué
+#
+#   PHASE 4 — DÉPLOIEMENT CONTINU (CD) SUR AWS
+#     4.1 AWS prérequis  identifiants, droits EC2, bucket d'état S3, Security Group,
+#                        IP élastique, clé SSH
+#     4.2 Terraform      plan (garde-fou anti-destruction) puis apply : création de la VM
+#     4.3 Déploiement    cloud-init, version du commit, HTTPS Let's Encrypt, secrets,
+#                        contrôle de santé
+#     4.4 Tests de fumée site public, API, ports fermés, en-têtes, TLS
+#     4.5 DAST prod      ZAP baseline (passif), Nuclei, testssl.sh
+#     4.6 Rapport        récapitulatif et URL du site
+#
+# Déclenchement :
+#   - push / pull request : phases 1 à 3 (aucune ressource AWS) ;
+#   - bouton « Run workflow » (workflow_dispatch) : phases 1 à 4 ;
+#   - push sur master avec la variable de dépôt AUTO_DEPLOY = true : phases 1 à 4.
+#
+# Secrets (Settings > Secrets and variables > Actions) :
+#   obligatoires : AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, SSH_PRIVATE_KEY
+#   facultatifs  : MISTRAL_API_KEY, EMAIL_USER, EMAIL_PASS, ADMIN_EMAIL, ADMIN_PASSWORD,
+#                  DB_BACKUP_URL, DB_BACKUP_TOKEN, DB_BACKUP_PASSPHRASE
+# Variables facultatives : AWS_REGION, INSTANCE_TYPE, ADMIN_SSH_CIDR, EIP_ALLOCATION_ID,
+#                  SECURITY_GROUP_ID, MISTRAL_MODEL, LETSENCRYPT_EMAIL, AUTO_DEPLOY, ENABLE_HTTPS
+# Documentation : docs/deployment/cicd-pipeline.md
+# Destruction    : workflow « Destroy » (.github/workflows/destroy.yml)
+# =============================================================================
+
+name: "CI/CD — LANDOLSI TIRES"
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "lisezmoi.txt"
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Créer/mettre à jour la VM AWS et déployer le site (phase 4)"
+        type: boolean
+        default: true
+      enable_https:
+        description: "Activer HTTPS (Let's Encrypt, domaine sslip.io)"
+        type: boolean
+        default: true
+      instance_type:
+        description: "Type d'instance EC2"
+        type: choice
+        options: [t3.small, t3.medium, t3.micro]
+        default: t3.small
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "22"
+  TF_VERSION: "1.14.7"
+  PROJECT: landolsi-tires
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  # Bouton : case « enable_https » ; push : variable ENABLE_HTTPS (défaut true)
+  ENABLE_HTTPS: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_https || (github.event_name != 'workflow_dispatch' && (vars.ENABLE_HTTPS || 'true')) }}
+  FORCE_COLOR: "1"
+
+jobs:
+  # ===========================================================================
+  # PHASE 1 — INTÉGRATION CONTINUE
+  # ===========================================================================
+  quality:
+    name: "1.1 Qualité du code (lint)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Installer les dépendances (npm ci, versions verrouillées)
+        run: |
+          npm ci --prefix backend --no-audit --no-fund
+          npm ci --prefix frontend --no-audit --no-fund
+
+      - name: ESLint frontend (React)
+        # set-state-in-effect et only-export-components : dette connue (12 composants,
+        # docs/deployment/readiness-report.md), signalée en avertissement. Toute autre
+        # erreur (variable non définie, import inutilisé...) bloque le pipeline.
+        working-directory: frontend
+        run: |
+          npx eslint . --max-warnings 50 \
+            --rule 'react-hooks/set-state-in-effect: warn' \
+            --rule 'react-refresh/only-export-components: warn'
+
+      - name: Syntaxe JavaScript du backend (node --check)
+        run: |
+          find backend -name '*.js' -not -path '*/node_modules/*' -print0 \
+            | xargs -0 -n1 node --check
+          echo "Syntaxe valide : $(find backend -name '*.js' -not -path '*/node_modules/*' | wc -l) fichiers"
+
+      - name: Casse des chemins d'import (Windows -> Linux)
+        run: node tests/deployment/check-import-case.cjs frontend/src backend
+
+      - name: ShellCheck (scripts d'exploitation)
+        run: |
+          shellcheck --version | head -2
+          shellcheck -x -P scripts -S warning scripts/*.sh scripts/lib/*.sh tests/deployment/*.sh .github/scripts/*.sh
+
+      - name: actionlint (workflows GitHub Actions)
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform fmt + validate
+        working-directory: infra/aws
+        run: |
+          terraform fmt -check -recursive -diff
+          terraform init -backend=false -input=false -no-color >/dev/null
+          terraform validate -no-color
+
+  tests:
+    name: "1.2 Tests unitaires et d'intégration (PostgreSQL 16)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: landolsi
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: landolsi_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U landolsi -d landolsi_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Dépendances backend
+        run: npm ci --prefix backend --no-audit --no-fund
+
+      - name: Client PostgreSQL 16 (pg_dump/pg_restore de la même version que le serveur)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+
+      - name: Fichier d'environnement de TEST (base éphémère)
+        run: |
+          umask 077
+          cat > "$RUNNER_TEMP/test.env" <<EOF
+          NODE_ENV=test
+          JWT_SECRET=$(openssl rand -hex 32)
+          DB_NAME=landolsi_test
+          DB_USER=landolsi
+          DB_PASSWORD=ci-only-password
+          DB_HOST=127.0.0.1
+          DB_PORT=5432
+          DB_SSL=false
+          DB_SYNC=none
+          TELEGRAM_POLLING_ENABLED=false
+          EOF
+          sed -i 's/^ *//' "$RUNNER_TEMP/test.env"
+          echo "ENV_FILE=$RUNNER_TEMP/test.env" >> "$GITHUB_ENV"
+
+      - name: Migrations Sequelize (puis idempotence)
+        working-directory: backend
+        run: |
+          NODE_ENV=production npx sequelize-cli db:migrate
+          NODE_ENV=production npx sequelize-cli db:migrate | tee "$RUNNER_TEMP/migrate2.log"
+          grep -q "No migrations were executed" "$RUNNER_TEMP/migrate2.log"
+          echo "Migrations idempotentes : OK"
+
+      - name: Tests backend (node:test, couverture de code)
+        working-directory: backend
+        run: |
+          node --test --test-concurrency=1 --experimental-test-coverage \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=junit --test-reporter-destination="$RUNNER_TEMP/junit.xml" \
+            test/*.test.js | tee "$RUNNER_TEMP/tests.log"
+
+      - name: Test de sauvegarde / restauration (pg_dump -> base neuve -> comparaison)
+        run: tests/deployment/backup-restore.test.sh "$ENV_FILE"
+
+      - name: Résumé des tests
+        if: always()
+        run: |
+          {
+            echo "## 1.2 Tests backend"
+            echo '```'
+            grep -E '^ℹ (tests|suites|pass|fail|cancelled|skipped|duration_ms)' "$RUNNER_TEMP/tests.log" || echo "journal absent"
+            echo '```'
+            echo "<details><summary>Couverture de code</summary>"
+            echo
+            echo '```'
+            sed -n '/start of coverage report/,/end of coverage report/p' "$RUNNER_TEMP/tests.log" | sed 's/^ℹ //' | tail -60
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tests-junit
+          path: ${{ runner.temp }}/junit.xml
+          if-no-files-found: ignore
+
+  build:
+    name: "1.3 Build frontend (Vite)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci + build de production (VITE_API_URL=/api)
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          VITE_API_URL=/api npm run build
+
+      - name: Aucune URL de développement dans le build
+        run: |
+          if grep -l "localhost:5001" frontend/dist/assets/*.js; then
+            echo "::error::URL localhost:5001 présente dans le build de production"; exit 1
+          fi
+          {
+            echo "## 1.3 Build frontend"
+            echo "| Fichier | Taille |"
+            echo "|---|---|"
+            find frontend/dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' \) -printf '| %P | %s octets |\n' | sort
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ===========================================================================
+  # PHASE 2 — SÉCURITÉ STATIQUE
+  # ===========================================================================
+  codeql:
+    name: "2.1 SAST CodeQL (${{ matrix.language }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - "**/node_modules/**"
+              - frontend/dist
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  semgrep:
+    name: "2.2 SAST Semgrep (OWASP, Node, React, IaC)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Analyse Semgrep
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:latest \
+            semgrep scan --metrics=off --disable-version-check \
+              --config p/owasp-top-ten --config p/javascript --config p/nodejs \
+              --config p/nodejsscan --config p/react --config p/secrets \
+              --config p/terraform --config p/github-actions \
+              --exclude 'frontend/dist' --exclude '**/node_modules' \
+              --sarif-output=semgrep.sarif --json-output=semgrep.json || true
+          test -s semgrep.json
+
+      - name: Résumé et porte de sécurité
+        run: |
+          total=$(jq '.results | length' semgrep.json)
+          errors=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep.json)
+          {
+            echo "## 2.2 Semgrep"
+            echo "Constats : **${total}** (dont **${errors}** de sévérité ERROR). Détail : onglet *Security > Code scanning*."
+            echo
+            echo "| Sévérité | Règle | Fichier |"
+            echo "|---|---|---|"
+            jq -r '.results[] | "| \(.extra.severity) | \(.check_id | split(".") | last) | \(.path):\(.start.line) |"' semgrep.json | sort | head -60
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::Semgrep : ${errors} constat(s) de sévérité ERROR"
+            exit 1
+          fi
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  gitleaks:
+    name: "2.3 Secrets (Gitleaks, historique complet)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Recherche de secrets dans tous les commits
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks:latest git /repo --redact --verbose \
+            --report-format sarif --report-path /repo/gitleaks.sarif
+          echo "## 2.3 Gitleaks : aucun secret détecté dans $(git rev-list --count HEAD) commits" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('gitleaks.sarif') != ''
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+  sca:
+    name: "2.4 SCA dépendances (npm audit, Trivy, SBOM)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: "npm audit (porte : aucune vulnérabilité haute/critique en production)"
+        run: |
+          status=0
+          {
+            echo "## 2.4 Analyse de composition logicielle (SCA)"
+            echo "| Projet | Périmètre | Critique | Haute | Moyenne | Basse |"
+            echo "|---|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for dir in backend frontend; do
+            for scope in production all; do
+              args=(); [ "$scope" = production ] && args=(--omit=dev)
+              (cd "$dir" && npm audit "${args[@]}" --json > "../audit-$dir-$scope.json" || true)
+              jq -r --arg d "$dir" --arg s "$scope" '.metadata.vulnerabilities |
+                "| \($d) | \($s) | \(.critical) | \(.high) | \(.moderate) | \(.low) |"' "audit-$dir-$scope.json" >> "$GITHUB_STEP_SUMMARY"
+            done
+            if ! (cd "$dir" && npm audit --omit=dev --audit-level=high); then
+              echo "::error::$dir : vulnérabilité haute ou critique dans une dépendance de production"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Trivy (vulnérabilités et secrets du système de fichiers)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest fs \
+            --scanners vuln,secret --severity CRITICAL,HIGH,MEDIUM \
+            --skip-dirs frontend/dist --format sarif --output trivy-fs.sarif .
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest fs \
+            --scanners vuln,secret --severity CRITICAL,HIGH --skip-dirs frontend/dist \
+            --format table . | tee trivy-fs.txt
+
+      - name: SBOM CycloneDX (inventaire des composants)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest fs \
+            --format cyclonedx --output sbom.cdx.json .
+          echo "SBOM : $(jq '.components | length' sbom.cdx.json) composants (artefact sbom-cyclonedx)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('trivy-fs.sarif') != ''
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sbom-cyclonedx
+          path: |
+            sbom.cdx.json
+            audit-*.json
+            trivy-fs.txt
+          if-no-files-found: ignore
+
+  iac:
+    name: "2.5 Sécurité IaC (Checkov, Trivy config)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Checkov (Terraform + GitHub Actions)
+        # Rapport sans blocage : certaines règles génériques ne s'appliquent pas à
+        # AWS Academy (pas de rôle IAM créable, pas de VPC dédié). Constats :
+        # Security > Code scanning. Exceptions justifiées dans infra/aws/.checkov.yaml.
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src bridgecrew/checkov:latest \
+            --config-file infra/aws/.checkov.yaml \
+            -d infra/aws -d .github/workflows \
+            --output cli --output sarif --output-file-path console,/src \
+            --soft-fail | tee checkov.txt
+          mv results_sarif.sarif checkov.sarif 2>/dev/null || true
+          {
+            echo "## 2.5 Checkov (IaC)"
+            echo '```'
+            grep -E '^(terraform|github_actions) scan results:|Passed checks|Failed checks' checkov.txt | head -10
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trivy config (mauvaises configurations Terraform)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest config \
+            --severity CRITICAL,HIGH,MEDIUM --format sarif --output trivy-iac.sarif infra/aws
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest config \
+            --severity CRITICAL,HIGH --format table infra/aws | tee trivy-iac.txt
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('checkov.sarif') != ''
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('trivy-iac.sarif') != ''
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac
+
+  # ===========================================================================
+  # PHASE 3 — DAST AVANT PRODUCTION + PORTE QUALITÉ
+  # ===========================================================================
+  dast-staging:
+    name: "3.1 DAST préproduction (OWASP ZAP, scan actif)"
+    needs: [tests, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: landolsi
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: landolsi_tires
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U landolsi -d landolsi_tires"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: API en mode production (base éphémère, migrations)
+        run: |
+          npm ci --prefix backend --omit=dev --no-audit --no-fund
+          sudo install -d -o "$USER" /srv/landolsi/uploads
+          cp backend/public/uploadPneu/* /srv/landolsi/uploads/ 2>/dev/null || true
+          umask 077
+          cat > "$RUNNER_TEMP/staging.env" <<EOF
+          NODE_ENV=production
+          HOST=127.0.0.1
+          PORT=5001
+          TRUST_PROXY=true
+          JWT_SECRET=$(openssl rand -hex 32)
+          MFA_ENCRYPTION_KEY=$(openssl rand -hex 32)
+          COOKIE_SECURE=false
+          CORS_ORIGINS=
+          DB_NAME=landolsi_tires
+          DB_USER=landolsi
+          DB_PASSWORD=ci-only-password
+          DB_HOST=127.0.0.1
+          DB_PORT=5432
+          DB_SSL=false
+          DB_SYNC=none
+          UPLOAD_DIR=/srv/landolsi/uploads
+          TELEGRAM_POLLING_ENABLED=false
+          EOF
+          sed -i 's/^ *//' "$RUNNER_TEMP/staging.env"
+          cd backend
+          ENV_FILE="$RUNNER_TEMP/staging.env" NODE_ENV=production npx sequelize-cli db:migrate
+          ENV_FILE="$RUNNER_TEMP/staging.env" nohup node app.js > "$RUNNER_TEMP/api.log" 2>&1 &
+
+      - name: Nginx avec la configuration de production (nginx/landolsi.conf)
+        run: |
+          sudo apt-get install -y -qq nginx >/dev/null
+          sudo install -d /srv/landolsi/dist
+          sudo cp -r frontend/dist/. /srv/landolsi/dist/
+          sed -e 's#/opt/landolsi/current/frontend/dist#/srv/landolsi/dist#' \
+              -e 's#/var/lib/landolsi/uploads/#/srv/landolsi/uploads/#' \
+              nginx/landolsi.conf | sudo tee /etc/nginx/sites-available/landolsi >/dev/null
+          sudo ln -sfn /etc/nginx/sites-available/landolsi /etc/nginx/sites-enabled/landolsi
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo chmod -R a+rX /srv/landolsi
+          sudo nginx -t
+          sudo systemctl restart nginx
+
+      - name: Contrôle de santé de la préproduction
+        run: |
+          scripts/health-check.sh --retries 30 || { cat "$RUNNER_TEMP/api.log"; exit 1; }
+
+      - name: OWASP ZAP — scan complet (spider + AJAX spider + attaques actives)
+        uses: zaproxy/action-full-scan@v0.13.0
+        with:
+          target: http://localhost/
+          rules_file_name: .zap/rules.tsv
+          cmd_options: "-j -m 3 -T 30"
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-preproduction
+
+      - name: Porte DAST (aucune alerte de risque élevé)
+        if: always()
+        run: |
+          [ -f report_json.json ] || { echo "::error::rapport ZAP absent"; exit 1; }
+          {
+            echo "## 3.1 DAST préproduction (ZAP, scan actif)"
+            echo "| Risque | Alerte | Occurrences |"
+            echo "|---|---|---|"
+            jq -r '.site[].alerts[] | "| \(.riskdesc) | \(.alert) | \(.count) |"' report_json.json | sort -r
+          } >> "$GITHUB_STEP_SUMMARY"
+          high=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+          if [ "$high" -gt 0 ]; then
+            echo "::error::ZAP : ${high} alerte(s) de risque ÉLEVÉ"
+            exit 1
+          fi
+
+      - name: Journal de l'API
+        if: always()
+        run: tail -n 100 "$RUNNER_TEMP/api.log" || true
+
+  gate:
+    name: "3.2 Porte qualité & sécurité"
+    needs: [quality, tests, build, codeql, semgrep, gitleaks, sca, iac, dast-staging]
+    if: always()
+    runs-on: ubuntu-24.04
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+    steps:
+      - name: Synthèse des contrôles
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          {
+            echo "## 3.2 Porte qualité & sécurité"
+            echo "| Contrôle | Résultat |"
+            echo "|---|---|"
+            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(if .value.result == "success" then "✅ succès" else "❌ " + .value.result end) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=$(echo "$RESULTS" | jq '[to_entries[] | select(.value.result != "success")] | length')
+          if [ "$failed" -gt 0 ]; then
+            echo "::error::${failed} contrôle(s) en échec : déploiement bloqué"
+            exit 1
+          fi
+
+      - name: Déploiement demandé ?
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          INPUT_DEPLOY: ${{ inputs.deploy }}
+          AUTO_DEPLOY: ${{ vars.AUTO_DEPLOY }}
+        run: |
+          deploy=false
+          if [ "$EVENT" = workflow_dispatch ] && [ "$INPUT_DEPLOY" = true ]; then deploy=true; fi
+          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/master ] && [ "$AUTO_DEPLOY" = true ]; then deploy=true; fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          if [ "$deploy" = true ]; then
+            echo "➡️ Phase 4 (AWS) lancée." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ℹ️ Phase 4 (AWS) non demandée : bouton *Run workflow* ou variable AUTO_DEPLOY=true." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ===========================================================================
+  # PHASE 4 — DÉPLOIEMENT CONTINU SUR AWS
+  # ===========================================================================
+  aws-preflight:
+    name: "4.1 AWS : prérequis (état S3, Security Group, IP élastique, clé SSH)"
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: aws-infra
+      cancel-in-progress: false
+    outputs:
+      sg_id: ${{ steps.sg.outputs.sg_id }}
+      eip_ip: ${{ steps.eip.outputs.ip }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Connexion AWS
+        id: aws
+        uses: ./.github/actions/terraform-init
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          terraform-version: ${{ env.TF_VERSION }}
+          project: ${{ env.PROJECT }}
+          init: "false"
+
+      - name: Droit de lancer une instance (run-instances --dry-run)
+        env:
+          INSTANCE_TYPE: ${{ inputs.instance_type || vars.INSTANCE_TYPE || 't3.small' }}
+        run: |
+          ami=$(aws ssm get-parameter --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id \
+                --query Parameter.Value --output text)
+          out=$(aws ec2 run-instances --dry-run --instance-type "$INSTANCE_TYPE" --image-id "$ami" --count 1 2>&1 || true)
+          if ! grep -q DryRunOperation <<<"$out"; then
+            echo "$out"
+            echo "::error::Le compte ne peut pas lancer d'instance $INSTANCE_TYPE (AWS Academy : lab arrêté ou quota)."
+            exit 1
+          fi
+          {
+            echo "## 4.1 Prérequis AWS"
+            echo "| Élément | Valeur |"
+            echo "|---|---|"
+            echo "| Compte | \`${{ steps.aws.outputs.account-id }}\` |"
+            echo "| Région | \`$AWS_REGION\` |"
+            echo "| RunInstances ($INSTANCE_TYPE) | ✅ autorisé |"
+            echo "| AMI Ubuntu 24.04 | \`$ami\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bucket S3 de l'état Terraform (versionné, chiffré, privé)
+        env:
+          BUCKET: ${{ steps.aws.outputs.state-bucket }}
+        run: |
+          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            echo "Bucket existant : $BUCKET"
+          else
+            if [ "$AWS_REGION" = us-east-1 ]; then
+              aws s3api create-bucket --bucket "$BUCKET" >/dev/null
+            else
+              aws s3api create-bucket --bucket "$BUCKET" \
+                --create-bucket-configuration "LocationConstraint=$AWS_REGION" >/dev/null
+            fi
+            echo "Bucket créé : $BUCKET"
+          fi
+          aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration \
+            BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
+          aws s3api put-bucket-encryption --bucket "$BUCKET" --server-side-encryption-configuration \
+            '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          echo "| État Terraform | \`s3://$BUCKET/$PROJECT/terraform.tfstate\` |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Security Group (créé par l'AWS CLI, contrainte AWS Academy)
+        id: sg
+        env:
+          SG_VAR: ${{ vars.SECURITY_GROUP_ID }}
+        run: |
+          vpc=$(aws ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[0].VpcId' --output text)
+          sg=""
+          if [ -n "$SG_VAR" ] && aws ec2 describe-security-groups --group-ids "$SG_VAR" >/dev/null 2>&1; then
+            sg="$SG_VAR"
+          else
+            sg=$(aws ec2 describe-security-groups \
+                  --filters "Name=group-name,Values=${PROJECT}-app" "Name=vpc-id,Values=$vpc" \
+                  --query 'SecurityGroups[0].GroupId' --output text)
+          fi
+          if [ -z "$sg" ] || [ "$sg" = None ]; then
+            sg=$(aws ec2 create-security-group --group-name "${PROJECT}-app" --vpc-id "$vpc" \
+                  --description "LANDOLSI TIRES : SSH restreint, HTTP/HTTPS publics" \
+                  --tag-specifications "ResourceType=security-group,Tags=[{Key=Name,Value=${PROJECT}-app},{Key=Project,Value=${PROJECT}}]" \
+                  --query GroupId --output text)
+            echo "Security Group créé : $sg"
+          fi
+          echo "sg_id=$sg" >> "$GITHUB_OUTPUT"
+          echo "| Security Group | \`$sg\` (VPC par défaut \`$vpc\`) |" >> "$GITHUB_STEP_SUMMARY"
+          # Règles temporaires d'un run interrompu
+          SG_ID="$sg" .github/scripts/sg-ssh.sh purge
+
+      - name: "IP élastique (hors Terraform : même IP et même URL à chaque déploiement)"
+        id: eip
+        env:
+          EIP_VAR: ${{ vars.EIP_ALLOCATION_ID }}
+        run: |
+          alloc=""
+          if [ -n "$EIP_VAR" ] && aws ec2 describe-addresses --allocation-ids "$EIP_VAR" >/dev/null 2>&1; then
+            alloc="$EIP_VAR"
+          else
+            [ -z "$EIP_VAR" ] || echo "::warning::EIP_ALLOCATION_ID=$EIP_VAR introuvable (lab réinitialisé ?)"
+            alloc=$(aws ec2 describe-addresses --filters "Name=tag:Name,Values=${PROJECT}-eip" \
+                     --query 'Addresses[0].AllocationId' --output text)
+          fi
+          if [ -z "$alloc" ] || [ "$alloc" = None ]; then
+            alloc=$(aws ec2 allocate-address --domain vpc \
+                     --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=Name,Value=${PROJECT}-eip},{Key=Project,Value=${PROJECT}}]" \
+                     --query AllocationId --output text)
+            echo "::notice::Nouvelle IP élastique réservée : $alloc (à enregistrer dans la variable EIP_ALLOCATION_ID)"
+          fi
+          aws ec2 create-tags --resources "$alloc" --tags "Key=Name,Value=${PROJECT}-eip" "Key=Project,Value=${PROJECT}" || true
+          ip=$(aws ec2 describe-addresses --allocation-ids "$alloc" --query 'Addresses[0].PublicIp' --output text)
+          echo "alloc=$alloc" >> "$GITHUB_OUTPUT"
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          echo "| IP élastique | \`$ip\` (\`$alloc\`) |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Variables Terraform (ci.auto.tfvars.json, stockées avec l'état)
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          BUCKET: ${{ steps.aws.outputs.state-bucket }}
+          SG_ID: ${{ steps.sg.outputs.sg_id }}
+          EIP_ALLOC: ${{ steps.eip.outputs.alloc }}
+          ADMIN_SSH_CIDR: ${{ vars.ADMIN_SSH_CIDR }}
+          INSTANCE_TYPE: ${{ inputs.instance_type || vars.INSTANCE_TYPE || 't3.small' }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          GIT_REF: ${{ github.ref_name }}
+        run: |
+          [ -n "$SSH_PRIVATE_KEY" ] || { echo "::error::secret SSH_PRIVATE_KEY absent"; exit 1; }
+          umask 077
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > "$RUNNER_TEMP/id_ec2"
+          pub=$(ssh-keygen -y -f "$RUNNER_TEMP/id_ec2") || { echo "::error::SSH_PRIVATE_KEY invalide ou protégée par une phrase secrète"; exit 1; }
+          rm -f "$RUNNER_TEMP/id_ec2"
+          # SSH fermé par défaut : seul le pipeline l'ouvre, le temps d'un job.
+          # 127.0.0.1/32 = aucune IP publique (0.0.0.0/0 est refusé par variables.tf).
+          cidr="${ADMIN_SSH_CIDR:-127.0.0.1/32}"
+          jq -n --arg region "$AWS_REGION" --arg project "$PROJECT" --arg type "$INSTANCE_TYPE" \
+                --arg pub "$pub" --arg cidr "$cidr" --arg sg "$SG_ID" --arg eip "$EIP_ALLOC" \
+                --arg repo "$REPO_URL" --arg ref "$GIT_REF" --argjson https "$ENABLE_HTTPS" '{
+            aws_region: $region, project_name: $project, instance_type: $type,
+            key_name: "vockey", ssh_public_key: $pub, ssh_allowed_cidr: $cidr,
+            security_group_id: $sg, eip_allocation_id: $eip, allocate_eip: false,
+            enable_https: $https, iam_instance_profile: "", root_volume_size: 20,
+            git_repo_url: $repo, git_ref: $ref }' > ci.auto.tfvars.json
+          aws s3 cp ci.auto.tfvars.json "s3://$BUCKET/$PROJECT/ci.auto.tfvars.json" --sse AES256 --only-show-errors
+          {
+            echo "| SSH administrateur | \`$cidr\` (+ IP du runner pendant les jobs, retirée ensuite) |"
+            echo "| Clé SSH injectée | \`$(ssh-keygen -lf <(echo "$pub") | awk '{print $2}')\` |"
+            echo "| Code déployé | \`$REPO_URL\` @ \`$GIT_REF\` (commit \`${GITHUB_SHA::7}\`) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  terraform:
+    name: "4.2 Terraform : plan & apply (création de la VM EC2)"
+    needs: aws-preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: aws-infra
+      cancel-in-progress: false
+    outputs:
+      instance_id: ${{ steps.out.outputs.instance_id }}
+      public_ip: ${{ steps.out.outputs.public_ip }}
+      domain: ${{ steps.out.outputs.domain }}
+    defaults:
+      run:
+        working-directory: infra/aws
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Connexion AWS + terraform init (état S3)
+        id: aws
+        uses: ./.github/actions/terraform-init
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          terraform-version: ${{ env.TF_VERSION }}
+          project: ${{ env.PROJECT }}
+
+      - name: Récupérer les variables Terraform
+        env:
+          BUCKET: ${{ steps.aws.outputs.state-bucket }}
+        run: aws s3 cp "s3://$BUCKET/$PROJECT/ci.auto.tfvars.json" ci.auto.tfvars.json --only-show-errors
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - name: Reprise des règles déjà présentes dans le Security Group (terraform import)
+        # Le groupe est créé hors Terraform (contrainte AWS Academy) et peut contenir
+        # des règles HTTP/HTTPS/SSH d'un déploiement local : les importer évite
+        # l'erreur « InvalidPermission.Duplicate » au lieu de les supprimer.
+        env:
+          SG_ID: ${{ needs.aws-preflight.outputs.sg_id }}
+        run: |
+          state=$(terraform state list 2>/dev/null || true)
+          cidr_ssh=$(jq -r .ssh_allowed_cidr ci.auto.tfvars.json)
+          import_rule() {
+            local addr="$1" port="$2" cidr="$3" id
+            if grep -qxF "$addr" <<<"$state"; then return 0; fi
+            id=$(aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$SG_ID" \
+                  --query "SecurityGroupRules[?IsEgress==\`false\` && FromPort==\`$port\` && ToPort==\`$port\` && CidrIpv4=='$cidr'].SecurityGroupRuleId | [0]" \
+                  --output text)
+            if [ -n "$id" ] && [ "$id" != None ]; then
+              echo "Import de $addr <- $id"
+              terraform import -input=false -no-color "$addr" "$id"
+            fi
+          }
+          import_rule aws_vpc_security_group_ingress_rule.http 80 0.0.0.0/0
+          if [ "$(jq -r .enable_https ci.auto.tfvars.json)" = true ]; then
+            import_rule 'aws_vpc_security_group_ingress_rule.https[0]' 443 0.0.0.0/0
+          fi
+          import_rule aws_vpc_security_group_ingress_rule.ssh 22 "$cidr_ssh"
+
+      - name: terraform plan
+        run: |
+          terraform plan -input=false -no-color -out=tfplan | tee plan.txt
+          terraform show -json tfplan > plan.json
+          {
+            echo "## 4.2 Terraform"
+            echo '```'
+            grep -E '^(Plan:|No changes)' plan.txt || true
+            echo '```'
+            echo "| Action | Ressource |"
+            echo "|---|---|"
+            jq -r '.resource_changes[] | select(.change.actions != ["no-op"]) | "| \(.change.actions | join("/")) | \(.address) |"' plan.json
+            echo "<details><summary>Plan complet</summary>"
+            echo
+            echo '```'
+            sed -n '/Terraform will perform/,$p' plan.txt | head -300
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Garde-fou (l'instance et sa base ne doivent jamais être détruites ici)
+        run: |
+          n=$(jq '[.resource_changes[] | select(.type == "aws_instance") | select(.change.actions | index("delete"))] | length' plan.json)
+          if [ "$n" -gt 0 ]; then
+            echo "::error::Le plan détruirait/remplacerait l'instance EC2 (et la base PostgreSQL locale). Utiliser le workflow Destroy si c'est voulu."
+            exit 1
+          fi
+
+      - name: terraform apply
+        run: terraform apply -input=false -no-color -auto-approve tfplan
+
+      - name: Sorties Terraform
+        id: out
+        run: |
+          terraform output -json > outputs.json
+          {
+            echo "instance_id=$(jq -r .instance_id.value outputs.json)"
+            echo "public_ip=$(jq -r .public_ip.value outputs.json)"
+            echo "domain=$(jq -r .sslip_domain.value outputs.json)"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "| Sortie | Valeur |"
+            echo "|---|---|"
+            jq -r 'to_entries[] | select(.key != "https_setup_command" and .key != "ssh_command") | "| \(.key) | `\(.value.value)` |"' outputs.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attendre l'état « running » et les contrôles de santé EC2
+        env:
+          INSTANCE_ID: ${{ steps.out.outputs.instance_id }}
+        run: |
+          aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+          echo "Instance $INSTANCE_ID : running"
+
+  deploy:
+    name: "4.3 Déploiement de l'application sur la VM"
+    needs: [aws-preflight, terraform]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: aws-infra
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ steps.final.outputs.url }}
+    outputs:
+      url: ${{ steps.final.outputs.url }}
+      https: ${{ steps.final.outputs.https }}
+    env:
+      EC2_HOST: ${{ needs.terraform.outputs.public_ip }}
+      INSTANCE_ID: ${{ needs.terraform.outputs.instance_id }}
+      DOMAIN: ${{ needs.terraform.outputs.domain }}
+      SG_ID: ${{ needs.aws-preflight.outputs.sg_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Connexion AWS
+        uses: ./.github/actions/terraform-init
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          terraform-version: ${{ env.TF_VERSION }}
+          project: ${{ env.PROJECT }}
+          init: "false"
+
+      - name: Ouvrir SSH pour ce runner uniquement (juste-à-temps)
+        run: .github/scripts/sg-ssh.sh open
+
+      - name: Connexion SSH (empreinte d'hôte vérifiée via la console AWS)
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: .github/scripts/ssh-setup.sh
+
+      - name: Attendre la fin de cloud-init (mises à jour, installation, 1er déploiement)
+        run: |
+          set +e
+          timeout 1500 ssh ec2 'sudo cloud-init status --wait --long'
+          rc=$?
+          set -e
+          echo "::group::Fin du journal cloud-init"
+          ssh ec2 'sudo tail -n 60 /var/log/cloud-init-output.log' || true
+          echo "::endgroup::"
+          # 0 = terminé, 2 = terminé avec avertissements (non bloquant)
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+            echo "::warning::cloud-init en erreur (code $rc) : l'étape suivante relance install.sh et deploy.sh (idempotents)."
+          fi
+
+      - name: Installer / mettre à jour le serveur (install.sh, HTTPS)
+        id: install
+        env:
+          SHA: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          LE_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
+        run: |
+          domain_args=""
+          if [ "$ENABLE_HTTPS" = true ]; then
+            domain_args="--domain $DOMAIN"
+            [ -z "$LE_EMAIL" ] || domain_args="$domain_args --email $LE_EMAIL"
+          fi
+          ssh ec2 "SHA='$SHA' REPO_URL='$REPO_URL' DOMAIN_ARGS='$domain_args' bash -s" <<'EOF'
+          set -euo pipefail
+          SRC=/opt/landolsi-src
+          [ -d "$SRC/.git" ] || sudo git clone --depth 1 "$REPO_URL" "$SRC"
+          sudo git -C "$SRC" fetch --quiet --depth 1 origin "$SHA"
+          sudo git -C "$SRC" checkout --quiet --force --detach "$SHA"
+          echo "Source serveur : $(sudo git -C "$SRC" log -1 --format='%h %s')"
+          # install.sh est idempotent ; avec --domain, certbot réutilise un certificat valide
+          # shellcheck disable=SC2086
+          if ! sudo "$SRC/scripts/install.sh" $DOMAIN_ARGS; then
+            if [ -n "$DOMAIN_ARGS" ]; then
+              echo "::warning::HTTPS impossible (limite Let's Encrypt de 5 certificats/semaine pour un même nom, DNS...) : retour en HTTP."
+              sudo "$SRC/scripts/install.sh"
+              echo "HTTPS_FAILED" > /tmp/landolsi-https-status
+            else
+              exit 1
+            fi
+          fi
+          EOF
+          if ssh ec2 'test -f /tmp/landolsi-https-status'; then
+            echo "https=false" >> "$GITHUB_OUTPUT"
+            ssh ec2 'rm -f /tmp/landolsi-https-status'
+          else
+            echo "https=$ENABLE_HTTPS" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "Déployer le commit (deploy.sh : build, migrations, bascule atomique, rollback auto)"
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          ssh ec2 "SHA='$SHA' bash -s" <<'EOF'
+          set -euo pipefail
+          SRC=/opt/landolsi-src
+          short=$(sudo git -C "$SRC" rev-parse --short HEAD)
+          current=$(readlink -f /opt/landolsi/current 2>/dev/null || true)
+          if [ -n "$current" ] && [ "${current##*-}" = "$short" ]; then
+            echo "Version $short déjà active ($(basename "$current")) : pas de reconstruction."
+          else
+            sudo "$SRC/scripts/deploy.sh" --source "$SRC"
+          fi
+          echo "Version active : $(basename "$(readlink -f /opt/landolsi/current)")"
+          EOF
+
+      - name: Assistants IA Mistral (si le secret MISTRAL_API_KEY existe)
+        continue-on-error: true
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          MISTRAL_MODEL: ${{ vars.MISTRAL_MODEL }}
+        run: |
+          if [ -z "$MISTRAL_API_KEY" ]; then
+            echo "::notice::MISTRAL_API_KEY absent : assistants IA désactivés (HTTP 503), le reste du site fonctionne."
+            exit 0
+          fi
+          model_args=""
+          [ -z "$MISTRAL_MODEL" ] || model_args="--model $MISTRAL_MODEL"
+          printf '%s\n' "$MISTRAL_API_KEY" | ssh ec2 "sudo /opt/landolsi-src/scripts/configure-ai.sh $model_args"
+
+      - name: E-mail SMTP (si les secrets EMAIL_USER / EMAIL_PASS existent)
+        continue-on-error: true
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          if [ -z "$EMAIL_USER" ] || [ -z "$EMAIL_PASS" ]; then
+            echo "::notice::EMAIL_USER/EMAIL_PASS absents : envoi d'e-mails non configuré."
+            exit 0
+          fi
+          printf 'EMAIL_USER=%s\nEMAIL_PASS=%s\n' "$EMAIL_USER" "$EMAIL_PASS" \
+            | ssh ec2 'sudo /opt/landolsi-src/scripts/configure-email.sh'
+
+      - name: Données (restauration de la sauvegarde chiffrée sur une base neuve)
+        env:
+          DB_BACKUP_URL: ${{ secrets.DB_BACKUP_URL }}
+          DB_BACKUP_TOKEN: ${{ secrets.DB_BACKUP_TOKEN }}
+          DB_BACKUP_PASSPHRASE: ${{ secrets.DB_BACKUP_PASSPHRASE }}
+        run: |
+          users=$(ssh ec2 'sudo -u postgres psql -XAtd landolsi_tires -c "SELECT count(*) FROM users"' || echo "?")
+          echo "Utilisateurs en base : $users"
+          if [ -z "$DB_BACKUP_URL" ] || [ -z "$DB_BACKUP_PASSPHRASE" ]; then
+            echo "::notice::DB_BACKUP_URL/DB_BACKUP_PASSPHRASE absents : pas de restauration automatique (base conservée : $users utilisateur(s))."
+            exit 0
+          fi
+          if [ "$users" != 0 ]; then
+            echo "Base déjà peuplée ($users utilisateurs) : restauration ignorée (aucune donnée écrasée)."
+            exit 0
+          fi
+          umask 077
+          auth=(); [ -z "$DB_BACKUP_TOKEN" ] || auth=(-H "Authorization: Bearer $DB_BACKUP_TOKEN")
+          curl -fsSL --retry 3 "${auth[@]}" -o "$RUNNER_TEMP/backup.dump.gpg" "$DB_BACKUP_URL"
+          printf '%s' "$DB_BACKUP_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
+            -o "$RUNNER_TEMP/ci_restore.dump" -d "$RUNNER_TEMP/backup.dump.gpg"
+          (cd "$RUNNER_TEMP" && sha256sum ci_restore.dump > ci_restore.dump.sha256)
+          scp "$RUNNER_TEMP/ci_restore.dump" "$RUNNER_TEMP/ci_restore.dump.sha256" ec2:/tmp/
+          ssh ec2 'bash -s' <<'EOF'
+          set -euo pipefail
+          D=/var/backups/landolsi/ci_restore.dump
+          sudo install -o landolsi -g landolsi -m 600 /tmp/ci_restore.dump "$D"
+          sudo install -o landolsi -g landolsi -m 600 /tmp/ci_restore.dump.sha256 "$D.sha256"
+          rm -f /tmp/ci_restore.dump /tmp/ci_restore.dump.sha256
+          sudo systemctl stop landolsi-backend
+          trap 'sudo systemctl start landolsi-backend' EXIT
+          sudo -u landolsi /opt/landolsi/current/scripts/restore-db.sh --env-file /etc/landolsi/backend.env \
+            --file "$D" --target-db landolsi_tires --allow-nonempty
+          cd /opt/landolsi/current/backend
+          sudo -u landolsi env NODE_ENV=production ENV_FILE=/etc/landolsi/backend.env ./node_modules/.bin/sequelize-cli db:migrate
+          EOF
+          rm -f "$RUNNER_TEMP"/backup.dump.gpg "$RUNNER_TEMP"/ci_restore.dump*
+          echo "Sauvegarde restaurée." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compte administrateur (si ADMIN_EMAIL / ADMIN_PASSWORD et aucun admin)
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          admins=$(ssh ec2 "sudo -u postgres psql -XAtd landolsi_tires -c \"SELECT count(*) FROM users WHERE role = 'admin'\"")
+          if [ "$admins" != 0 ]; then echo "Administrateur(s) présent(s) : $admins"; exit 0; fi
+          if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ]; then
+            echo "::notice::Aucun administrateur : ajouter les secrets ADMIN_EMAIL/ADMIN_PASSWORD (ou restaurer une sauvegarde)."
+            exit 0
+          fi
+          # Mot de passe transmis sur l'entrée standard : absent de la ligne de commande du serveur
+          printf '%s\n' "$ADMIN_PASSWORD" | ssh ec2 "cd /opt/landolsi/current/backend && sudo -u landolsi env NODE_ENV=production ENV_FILE=/etc/landolsi/backend.env ADMIN_EMAIL='$ADMIN_EMAIL' bash -c 'IFS= read -r ADMIN_PASSWORD; export ADMIN_PASSWORD; exec node createAdmin.js'"
+
+      - name: Contrôle de santé sur le serveur (API, Nginx, frontend)
+        id: final
+        env:
+          HTTPS_OK: ${{ steps.install.outputs.https }}
+        run: |
+          ssh ec2 'sudo /opt/landolsi/current/scripts/health-check.sh --retries 30'
+          ssh ec2 'systemctl is-active landolsi-backend nginx postgresql'
+          if [ "$HTTPS_OK" = true ]; then url="https://$DOMAIN/"; else url="http://$EC2_HOST/"; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "https=$HTTPS_OK" >> "$GITHUB_OUTPUT"
+          {
+            echo "## 4.3 Déploiement"
+            echo "- Version active : \`$(ssh ec2 'basename "$(readlink -f /opt/landolsi/current)"')\`"
+            echo "- Site : **$url**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refermer SSH et effacer la clé du runner
+        if: always()
+        run: |
+          .github/scripts/sg-ssh.sh close || true
+          rm -rf ~/.ssh/id_ec2 ~/.ssh/config
+
+  smoke:
+    name: "4.4 Tests de fumée (site public)"
+    needs: [terraform, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      URL: ${{ needs.deploy.outputs.url }}
+      EC2_HOST: ${{ needs.terraform.outputs.public_ip }}
+      HTTPS: ${{ needs.deploy.outputs.https }}
+    steps:
+      - name: Tests fonctionnels et de sécurité de base depuis Internet
+        run: |
+          base="${URL%/}"
+          fail=0; rows=()
+          check() { # nom, commande
+            local name="$1"; shift
+            if "$@" >/dev/null 2>&1; then rows+=("| ✅ | $name |"); else rows+=("| ❌ | $name |"); fail=1; fi
+          }
+          warn() {
+            local name="$1"; shift
+            if "$@" >/dev/null 2>&1; then rows+=("| ✅ | $name |"); else rows+=("| ⚠️ | $name (avertissement) |"); fi
+          }
+          check "Page d'accueil (SPA React)"     bash -c "curl -fsS --max-time 15 '$base/' | grep -q '<div id=\"root\">'"
+          check "API /api/health, base PostgreSQL up" bash -c "curl -fsS --max-time 15 '$base/api/health' | grep -q '\"database\":\"up\"'"
+          check "Catalogue public /api/pneus/getallpneus" bash -c "curl -fsS --max-time 15 '$base/api/pneus/getallpneus' | jq -e . "
+          check "Route admin refusée sans session (401)" bash -c "test \"\$(curl -s -o /dev/null -w '%{http_code}' '$base/api/users/admin')\" = 401"
+          check "Route inconnue : 404 sans pile d'erreur" bash -c "! curl -s '$base/api/route-inexistante' | grep -qE '^ +at |node_modules'"
+          check "En-tête X-Content-Type-Options: nosniff" bash -c "curl -fsSI --max-time 15 '$base/' | grep -qi 'x-content-type-options: nosniff'"
+          check "Version Nginx masquée (server_tokens off)" bash -c "! curl -sI '$base/' | grep -qiE '^server: nginx/[0-9]'"
+          check "En-tête X-Frame-Options" bash -c "curl -sI '$base/' | grep -qi '^x-frame-options'"
+          check "En-tête Referrer-Policy" bash -c "curl -sI '$base/' | grep -qi '^referrer-policy'"
+          check "API Node (5001) non exposée" bash -c "! nc -z -w 5 '$EC2_HOST' 5001"
+          check "PostgreSQL (5432) non exposé" bash -c "! nc -z -w 5 '$EC2_HOST' 5432"
+          warn  "SSH (22) fermé à Internet après le déploiement" bash -c "! nc -z -w 5 '$EC2_HOST' 22"
+          if [ "$HTTPS" = true ]; then
+            check "Certificat TLS valide (chaîne Let's Encrypt)" curl -fsS --max-time 15 "$base/"
+            check "Redirection HTTP -> HTTPS" bash -c "curl -sI 'http://$EC2_HOST/' | grep -qiE '^location: https://'"
+            warn  "HSTS (Strict-Transport-Security)" bash -c "curl -sI '$base/' | grep -qi '^strict-transport-security'"
+          fi
+          {
+            echo "## 4.4 Tests de fumée — $URL"
+            echo "| Résultat | Test |"
+            echo "|---|---|"
+            printf '%s\n' "${rows[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${rows[@]}"
+          exit $fail
+
+  dast-prod:
+    name: "4.5 DAST production (ZAP baseline, Nuclei, TLS)"
+    needs: [terraform, deploy, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      URL: ${{ needs.deploy.outputs.url }}
+      HTTPS: ${{ needs.deploy.outputs.https }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: "OWASP ZAP — baseline (passif, sans attaque : adapté à la production)"
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: ${{ needs.deploy.outputs.url }}
+          rules_file_name: .zap/rules.tsv
+          cmd_options: "-j -m 3"
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-production
+
+      - name: Résultats ZAP
+        if: always()
+        run: |
+          [ -f report_json.json ] || exit 0
+          {
+            echo "## 4.5 DAST production"
+            echo "### OWASP ZAP baseline"
+            echo "| Risque | Alerte | Occurrences |"
+            echo "|---|---|---|"
+            jq -r '.site[].alerts[] | "| \(.riskdesc) | \(.alert) | \(.count) |"' report_json.json | sort -r
+          } >> "$GITHUB_STEP_SUMMARY"
+          high=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+          echo "ZAP_HIGH=$high" >> "$GITHUB_ENV"
+
+      - name: Nuclei (CVE, expositions, mauvaises configurations ; modèles non intrusifs)
+        if: always()
+        run: |
+          mkdir -m 777 -p nuclei
+          docker run --rm -v "$PWD/nuclei:/out" projectdiscovery/nuclei:latest \
+            -u "$URL" -as -severity low,medium,high,critical \
+            -etags dos,fuzz,intrusive,brute-force -rl 30 -c 10 -timeout 10 \
+            -jsonl -o /out/nuclei.jsonl -silent -disable-update-check || true
+          touch nuclei/nuclei.jsonl
+          {
+            echo "### Nuclei"
+            echo "| Sévérité | Modèle | Cible |"
+            echo "|---|---|---|"
+            jq -r '"| \(.info.severity) | \(.["template-id"]) | \(.["matched-at"]) |"' nuclei/nuclei.jsonl | sort | head -50
+            echo
+            echo "Total : $(wc -l < nuclei/nuclei.jsonl) constat(s)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          nh=$(jq -s '[.[] | select(.info.severity == "high" or .info.severity == "critical")] | length' nuclei/nuclei.jsonl)
+          echo "NUCLEI_HIGH=$nh" >> "$GITHUB_ENV"
+
+      - name: testssl.sh (protocoles, suites de chiffrement, vulnérabilités TLS)
+        if: always() && env.HTTPS == 'true'
+        run: |
+          mkdir -m 777 -p tls
+          host=$(echo "$URL" | sed -E 's#https?://([^/]+)/?.*#\1#')
+          docker run --rm -v "$PWD/tls:/out" drwetter/testssl.sh:3.2 --quiet --color 0 --warnings off \
+            --protocols --server-defaults --vulnerable --headers \
+            --jsonfile /out/testssl.json --htmlfile /out/testssl.html "$host" > tls/testssl.txt || true
+          {
+            echo "### testssl.sh"
+            echo "| Sévérité | Contrôle | Constat |"
+            echo "|---|---|---|"
+            jq -r '.[] | select(.severity | IN("CRITICAL","HIGH","MEDIUM","LOW")) | "| \(.severity) | \(.id) | \(.finding | .[0:100]) |"' tls/testssl.json | head -40
+          } >> "$GITHUB_STEP_SUMMARY"
+          tc=$(jq '[.[] | select(.severity == "CRITICAL")] | length' tls/testssl.json)
+          echo "TLS_CRITICAL=$tc" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dast-production-reports
+          path: |
+            nuclei/
+            tls/
+          if-no-files-found: ignore
+
+      - name: Porte DAST production
+        if: always()
+        run: |
+          echo "ZAP élevé : ${ZAP_HIGH:-0} | Nuclei élevé/critique : ${NUCLEI_HIGH:-0} | TLS critique : ${TLS_CRITICAL:-0}"
+          if [ "${ZAP_HIGH:-0}" -gt 0 ] || [ "${NUCLEI_HIGH:-0}" -gt 0 ] || [ "${TLS_CRITICAL:-0}" -gt 0 ]; then
+            echo "::error::Vulnérabilité de risque élevé détectée en production"
+            exit 1
+          fi
+
+  report:
+    name: "4.6 Rapport de déploiement"
+    needs: [aws-preflight, terraform, deploy, smoke, dast-prod]
+    if: always() && needs.aws-preflight.result != 'skipped'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Récapitulatif
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          URL: ${{ needs.deploy.outputs.url }}
+          INSTANCE_ID: ${{ needs.terraform.outputs.instance_id }}
+          IP: ${{ needs.terraform.outputs.public_ip }}
+        run: |
+          {
+            echo "# 🚀 LANDOLSI TIRES — Rapport de déploiement"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Site | **${URL:-non déployé}** |"
+            echo "| Instance EC2 | \`${INSTANCE_ID:--}\` |"
+            echo "| IP élastique | \`${IP:--}\` |"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo
+            echo "| Étape | Résultat |"
+            echo "|---|---|"
+            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(if .value.result == "success" then "✅" else "❌ " + .value.result end) |"'
+            echo
+            echo "Pour supprimer la VM : **Actions > Destroy — infrastructure AWS > Run workflow** (saisir \`DESTROY\`)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$RESULTS" | jq -e '[to_entries[] | select(.value.result != "success")] | length == 0' >/dev/null
