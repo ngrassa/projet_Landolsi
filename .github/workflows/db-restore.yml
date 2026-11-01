@@ -20,14 +20,9 @@
 
 name: Restauration base de données
 
+# Manuel uniquement : un push ne déclenche plus ce workflow. La restauration de la
+# base est faite par le pipeline CI/CD (cicd.yml, job 2.3) depuis la sauvegarde S3.
 on:
-  push:
-    branches: [master]
-    paths:
-      - db/backup/**   # sommes de référence : modifiées à chaque nouvelle sauvegarde
-      - scripts/restore-db.sh
-      - scripts/restore-encrypted-backup.sh
-      - .github/workflows/db-restore.yml
   workflow_dispatch:
     inputs:
       target:

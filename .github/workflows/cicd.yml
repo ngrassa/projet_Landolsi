@@ -31,16 +31,20 @@
 #     3.6 Rapport        récapitulatif de toutes les étapes et URL du site
 #
 # Déclenchement :
-#   - push / pull request : phases 1 et 3 (aucune ressource AWS) ;
-#   - bouton « Run workflow » (workflow_dispatch) : phases 1, 2 et 3 ;
-#   - push sur master avec la variable de dépôt AUTO_DEPLOY = true : phases 1, 2 et 3.
+#   Le pipeline ne s'exécute QUE sur demande explicite dans un message de commit :
+#   - push sur master avec « [deploy] » dans un message de commit : phases 1, 2 et 3
+#     (VM AWS, déploiement, restauration de la base, analyses de sécurité) ;
+#   - push sur master avec « [ci] » : phases 1 et 3 (aucune ressource AWS) ;
+#   - push SANS marqueur : aucun job exécuté (seul le job 0 lit le message, ≈ 5 s) ;
+#   - bouton « Run workflow » (workflow_dispatch) : phases 1, 2 et 3.
+#   Exemple : git commit -m "Correction du panier [deploy]" && git push
 #
 # Secrets (Settings > Secrets and variables > Actions) :
 #   obligatoires : AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, SSH_PRIVATE_KEY
 #   facultatifs  : MISTRAL_API_KEY, EMAIL_USER, EMAIL_PASS, ADMIN_EMAIL, ADMIN_PASSWORD,
 #                  DB_BACKUP_PASSPHRASE, DB_BACKUP_GPG_B64, DB_BACKUP_URL, DB_BACKUP_TOKEN
 # Variables facultatives : AWS_REGION, INSTANCE_TYPE, ADMIN_SSH_CIDR, ADMIN_SSH_PUBLIC_KEY, EIP_ALLOCATION_ID,
-#                  SECURITY_GROUP_ID, MISTRAL_MODEL, LETSENCRYPT_EMAIL, AUTO_DEPLOY, ENABLE_HTTPS
+#                  SECURITY_GROUP_ID, MISTRAL_MODEL, LETSENCRYPT_EMAIL, ENABLE_HTTPS
 # Documentation : docs/deployment/cicd-pipeline.md
 # Destruction    : workflow « Destroy » (.github/workflows/destroy.yml)
 # =============================================================================
@@ -49,12 +53,6 @@ name: "CI/CD — LANDOLSI TIRES"
 
 on:
   push:
-    branches: [master]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "lisezmoi.txt"
-  pull_request:
     branches: [master]
   workflow_dispatch:
     inputs:
@@ -77,7 +75,7 @@ permissions:
 
 concurrency:
   group: cicd-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: "22"
@@ -90,9 +88,53 @@ env:
 
 jobs:
   # ===========================================================================
+  # 0 — LE PIPELINE DOIT-IL S'EXÉCUTER ? (marqueur dans le message de commit)
+  # ===========================================================================
+  trigger:
+    name: "0. Déclenchement demandé ? ([deploy] / [ci] dans le commit)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.marker.outputs.run }}
+      deploy: ${{ steps.marker.outputs.deploy }}
+    steps:
+      - name: Lire les messages des commits poussés
+        id: marker
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_DEPLOY: ${{ inputs.deploy }}
+          # Tous les commits du push (pas seulement le dernier)
+          MESSAGES: ${{ toJSON(github.event.commits.*.message) }}
+        run: |
+          run=false; deploy=false
+          if [ "$EVENT" = workflow_dispatch ]; then
+            run=true
+            [ "$INPUT_DEPLOY" = true ] && deploy=true
+            reason="bouton Run workflow"
+          elif grep -qiF '[deploy]' <<<"$MESSAGES"; then
+            run=true; deploy=true; reason="marqueur [deploy] dans un commit"
+          elif grep -qiF '[ci]' <<<"$MESSAGES"; then
+            run=true; reason="marqueur [ci] dans un commit"
+          else
+            reason="aucun marqueur [deploy] ou [ci] : push sans pipeline"
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          {
+            echo "## 0. Déclenchement"
+            echo "- Motif : **$reason**"
+            echo "- Pipeline : \`$run\` — Déploiement AWS : \`$deploy\`"
+            echo
+            echo "Pour lancer le pipeline : \`git commit -m \"... [deploy]\"\` (complet) ou \`[ci]\` (sans AWS)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$reason"
+
+  # ===========================================================================
   # PHASE 1 — INTÉGRATION CONTINUE
   # ===========================================================================
   quality:
+    needs: trigger
+    if: needs.trigger.outputs.run == 'true'
     name: "1.1 Qualité du code (lint)"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -154,6 +196,8 @@ jobs:
           terraform validate -no-color
 
   tests:
+    needs: trigger
+    if: needs.trigger.outputs.run == 'true'
     name: "1.2 Tests unitaires et d'intégration (PostgreSQL 16)"
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -247,6 +291,8 @@ jobs:
           if-no-files-found: ignore
 
   build:
+    needs: trigger
+    if: needs.trigger.outputs.run == 'true'
     name: "1.3 Build frontend (Vite)"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -288,10 +334,10 @@ jobs:
   # ===========================================================================
   codeql:
     name: "3.1 SAST CodeQL (${{ matrix.language }})"
-    needs: [gate, smoke]
+    needs: [trigger, gate, smoke]
     # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
     # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -319,10 +365,10 @@ jobs:
 
   semgrep:
     name: "3.2 SAST Semgrep (OWASP, Node, React, IaC)"
-    needs: [gate, smoke]
+    needs: [trigger, gate, smoke]
     # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
     # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -370,6 +416,8 @@ jobs:
           category: semgrep
 
   gitleaks:
+    needs: trigger
+    if: needs.trigger.outputs.run == 'true'
     name: "1.4 Secrets (Gitleaks, historique complet)"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -396,10 +444,10 @@ jobs:
 
   sca:
     name: "3.3 SCA dépendances (npm audit, Trivy, SBOM)"
-    needs: [gate, smoke]
+    needs: [trigger, gate, smoke]
     # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
     # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -469,10 +517,10 @@ jobs:
 
   iac:
     name: "3.4 Sécurité IaC (Checkov, Trivy config)"
-    needs: [gate, smoke]
+    needs: [trigger, gate, smoke]
     # Après la mise en ligne (ou dès la porte CI sans déploiement) ; s'exécute même si
     # une étape précédente a échoué, pour toujours produire les rapports de sécurité.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -525,8 +573,8 @@ jobs:
   # ===========================================================================
   dast-staging:
     name: "3.5 DAST préproduction (OWASP ZAP, scan actif)"
-    needs: [build, gate, smoke]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    needs: [trigger, build, gate, smoke]
+    if: ${{ !cancelled() && needs.trigger.outputs.run == 'true' && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
@@ -635,8 +683,8 @@ jobs:
 
   gate:
     name: "1.5 Porte CI (déploiement autorisé ?)"
-    needs: [quality, tests, build, gitleaks]
-    if: always()
+    needs: [trigger, quality, tests, build, gitleaks]
+    if: ${{ always() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
@@ -660,19 +708,14 @@ jobs:
       - name: Déploiement demandé ?
         id: decide
         env:
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          INPUT_DEPLOY: ${{ inputs.deploy }}
-          AUTO_DEPLOY: ${{ vars.AUTO_DEPLOY }}
+          DEPLOY: ${{ needs.trigger.outputs.deploy }}
         run: |
-          deploy=false
-          if [ "$EVENT" = workflow_dispatch ] && [ "$INPUT_DEPLOY" = true ]; then deploy=true; fi
-          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/master ] && [ "$AUTO_DEPLOY" = true ]; then deploy=true; fi
+          deploy="$DEPLOY"
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
           if [ "$deploy" = true ]; then
             echo "➡️ Phase 2 (création de la VM et déploiement) lancée." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "ℹ️ Phase 2 (AWS) non demandée : bouton *Run workflow* ou variable AUTO_DEPLOY=true." >> "$GITHUB_STEP_SUMMARY"
+            echo "ℹ️ Phase 2 (AWS) non demandée : marqueur [deploy] dans le commit ou bouton *Run workflow*." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ===========================================================================
@@ -1274,8 +1317,8 @@ jobs:
 
   report:
     name: "3.6 Rapport final"
-    needs: [gate, aws-preflight, terraform, deploy, smoke, codeql, semgrep, sca, iac, dast-staging]
-    if: always()
+    needs: [trigger, gate, aws-preflight, terraform, deploy, smoke, codeql, semgrep, sca, iac, dast-staging]
+    if: ${{ always() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Récapitulatif
