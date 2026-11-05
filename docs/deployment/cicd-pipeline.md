@@ -60,12 +60,15 @@ push / PR / bouton
                                                2.3 Déploiement (cloud-init, HTTPS)
                                                       ▼
                                                2.4 Tests de fumée ──────────► 3.1 CodeQL
+                                               2.5 Observabilité CloudWatch
                                                                               3.2 Semgrep
                                                                               3.3 SCA + SBOM
                                                                               3.4 IaC (Checkov, Trivy)
                                                                               3.5 DAST (ZAP actif, préprod)
                                                                                       ▼
                                                                               3.6 Rapport final
+                                                                                      ▼
+                                                                              4. Notification e-mail (succès)
 ```
 
 Sans déploiement (marqueur `[ci]`), la phase 3 démarre dès la porte CI.
@@ -202,8 +205,42 @@ pile d'erreur, en-têtes de sécurité, version Nginx masquée, **ports 5001 et 
 fermés**, SSH fermé après le job, certificat valide, redirection HTTP → HTTPS, HSTS
 (avertissement).
 
+### 2.5 Observabilité CloudWatch
+
+| Brique | Où | Contenu |
+|---|---|---|
+| Métriques EC2 de base | AWS, sans agent | CPU, réseau, contrôles de santé (`StatusCheckFailed`) |
+| **Agent CloudWatch** | `scripts/configure-cloudwatch.sh`, lancé par SSH | mémoire, swap, disque `/`, processus `node`/`postgres`/`nginx` (espace de noms `LandolsiTires`, dimension `InstanceId`) |
+| **Journaux** | groupes `/landolsi-tires/{nginx-access,nginx-error,backend,backup,cloud-init}` | rétention `LOG_RETENTION_DAYS` (14 j) ; créés **hors Terraform** : consultables après Destroy |
+| **Filtres de métriques** | job 2.5 (AWS CLI) | `HttpRequests`, `Http4xx`, `Http5xx` (journal d'accès Nginx), `ApiErrors` (journal de l'API) |
+| **Alarmes** | Terraform, `infra/aws/observability.tf` | CPU > 80 % (10 min), contrôle de santé EC2, mémoire > 85 %, disque > 85 %, > 5 réponses 5xx / 5 min, > 10 erreurs API / 5 min |
+| **Tableau de bord** | Terraform, `aws_cloudwatch_dashboard` | CloudWatch > Dashboards > `landolsi-tires` : graphiques, état des alarmes, dernières erreurs de l'API (Logs Insights) |
+| **Notifications** | rubrique SNS `landolsi-tires-notifications` (job 2.1, hors Terraform) | alarmes (passage en ALARME et retour à OK) et « pipeline réussi » |
+
+L'agent a besoin d'un profil d'instance : AWS Academy interdit la création de rôles,
+le pipeline utilise donc `LabInstanceProfile` (variable `IAM_INSTANCE_PROFILE`,
+`none` pour s'en passer : seules les métriques EC2 de base restent). Les alarmes et
+le tableau de bord sont supprimés par Destroy avec la VM ; la rubrique SNS, ses
+abonnements et les journaux sont conservés.
+
 ### 3.6 Rapport final
 URL du site, instance, IP, résultat de chaque étape des trois phases.
+
+### 4. Notification e-mail « pipeline réussi »
+
+Job `notify`, exécuté seulement si le rapport final est vert (aucune étape en
+échec ni annulée), en mode `[deploy]` comme en mode `[ci]`. Le message contient le
+commit, l'auteur, l'URL du site, l'instance, le lien du tableau de bord et du run.
+
+| Canal | Condition | Remarque |
+|---|---|---|
+| **Amazon SNS** (principal) | identifiants AWS valides, abonnement confirmé | au 1er déploiement, chaque destinataire reçoit « AWS Notification - Subscription Confirmation » : cliquer **Confirm subscription** une fois |
+| **SMTP** (complément) | secrets `EMAIL_USER` / `EMAIL_PASS` (Gmail : mot de passe d'application) | envoi direct, sans confirmation ; `SMTP_HOST`/`SMTP_PORT` modifiables |
+
+Destinataires : variable (ou secret) `NOTIFICATION_EMAILS`, adresses séparées par
+des virgules. Le dépôt et ses journaux sont **publics** : les adresses ne sont écrites
+ni dans le code ni dans la documentation, et sont masquées (`::add-mask::`) dans les
+journaux. Si aucun canal n'aboutit, le job affiche un avertissement sans rendre le run rouge.
 
 ## 6. Pipeline Destroy (chemin inverse)
 
@@ -229,7 +266,7 @@ Options : `backup` (défaut oui), `delete_root_volume` (défaut non),
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | oui | AWS Academy > AWS Details > AWS CLI. **Expirent avec la session du lab (~4 h)** : les recopier à chaque session |
 | `SSH_PRIVATE_KEY` | oui | clé privée sans phrase secrète (ex. `~/.ssh/landolsi_ec2_ed25519`) |
 | `MISTRAL_API_KEY` | non | assistants IA |
-| `EMAIL_USER`, `EMAIL_PASS` | non | factures par e-mail |
+| `EMAIL_USER`, `EMAIL_PASS` | non | factures par e-mail ; aussi canal SMTP de la notification « pipeline réussi » |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | non | compte administrateur sur une base neuve |
 | `DB_BACKUP_PASSPHRASE` | pour restaurer | phrase secrète GPG des sauvegardes (`~/.config/landolsi/db-backup.passphrase`) |
 | `DB_BACKUP_GPG_B64` | non | sauvegarde chiffrée de référence en base64 (archive < 36 Ko) |
@@ -248,6 +285,10 @@ Options : `backup` (défaut oui), `delete_root_volume` (défaut non),
 | `MISTRAL_MODEL` | `ministral-14b-latest` | modèle Mistral |
 | `LETSENCRYPT_EMAIL` | aucun | e-mail du compte Let's Encrypt |
 | `ENABLE_HTTPS` | `true` | HTTPS lors des déploiements automatiques |
+| `NOTIFICATION_EMAILS` | aucune | destinataires des notifications (pipeline réussi, alarmes), séparés par des virgules |
+| `IAM_INSTANCE_PROFILE` | `LabInstanceProfile` | profil de l'instance pour l'agent CloudWatch (`none` = sans agent) |
+| `LOG_RETENTION_DAYS` | `14` | rétention des journaux CloudWatch |
+| `SMTP_HOST`, `SMTP_PORT` | `smtp.gmail.com`, `465` | serveur SMTP de la notification (si `EMAIL_USER`/`EMAIL_PASS`) |
 
 ### Sauvegardes sans secret supplémentaire : clé dérivée de la clé SSH
 

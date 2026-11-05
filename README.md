@@ -92,6 +92,12 @@ Travail de préparation au déploiement cloud (octobre 2026). Le fonctionnement 
 - Déclenchement : un `push` ne lance rien sauf `[deploy]` (complet) ou `[ci]` (sans AWS) dans le titre du commit ; plus de déclenchement sur *pull request*.
 - Détails : [§21](#21-pipeline-cicd-github-actions) et [`docs/deployment/cicd-pipeline.md`](docs/deployment/cicd-pipeline.md).
 
+### Observabilité CloudWatch et notification e-mail (5 novembre 2026)
+
+- Job **2.5 Observabilité** : agent CloudWatch sur la VM (`scripts/configure-cloudwatch.sh` : mémoire, disque, swap, processus), journaux Nginx/API/sauvegardes/cloud-init dans CloudWatch Logs, filtres de métriques (HTTP 4xx/5xx, erreurs API).
+- `infra/aws/observability.tf` : 6 alarmes (CPU, santé EC2, mémoire, disque, 5xx, erreurs API) et tableau de bord `landolsi-tires`, notifiés par la rubrique SNS `landolsi-tires-notifications`.
+- Job **4. Notification** : e-mail « pipeline réussi » aux destinataires de la variable `NOTIFICATION_EMAILS` (SNS ; SMTP en plus si `EMAIL_USER`/`EMAIL_PASS`). Abonnement SNS à confirmer une fois par destinataire.
+
 ### Non modifié (à traiter par l'équipe)
 
 - 17 erreurs `npm run lint` existantes, dont `setAvis` non défini dans `frontend/src/pages/CommandeDetails/CommandeDetails.jsx:148` (erreur à l'exécution sur ce chemin).
@@ -1010,3 +1016,13 @@ gh workflow run destroy.yml --repo ngrassa/projet_Landolsi -f confirm=DESTROY  #
 ```
 
 L'état Terraform du pipeline est stocké dans S3 (`landolsi-tires-tfstate-<compte>-<région>`), distinct de l'état local du poste d'administration : ne pas gérer la même instance des deux façons. Documentation complète : [`docs/deployment/cicd-pipeline.md`](docs/deployment/cicd-pipeline.md).
+
+### Observabilité (CloudWatch) et notification de succès
+
+- **Job 2.5** : agent CloudWatch (profil `LabInstanceProfile`), métriques mémoire/disque/swap/processus (espace de noms `LandolsiTires`), journaux `/landolsi-tires/{nginx-access,nginx-error,backend,backup,cloud-init}` (14 jours, conservés après Destroy), filtres `HttpRequests`, `Http4xx`, `Http5xx`, `ApiErrors`.
+- **Alarmes et tableau de bord** (Terraform, `infra/aws/observability.tf`) : CPU > 80 %, contrôle de santé EC2, mémoire > 85 %, disque > 85 %, > 5 erreurs 5xx ou > 10 erreurs API en 5 min. Console : *CloudWatch > Dashboards > landolsi-tires* (lien dans la sortie `cloudwatch_dashboard_url`).
+- **Notification** : quand le pipeline réussit, le job `notify` envoie un e-mail (commit, site, tableau de bord, lien du run) aux adresses de la variable `NOTIFICATION_EMAILS`, via la rubrique SNS `landolsi-tires-notifications` (qui relaie aussi les alarmes). **Chaque destinataire doit cliquer une fois « Confirm subscription »** dans l'e-mail d'AWS reçu au premier déploiement. Avec les secrets `EMAIL_USER`/`EMAIL_PASS`, un e-mail SMTP est aussi envoyé (sans confirmation).
+
+```bash
+gh variable set NOTIFICATION_EMAILS --repo ngrassa/projet_Landolsi --body "adresse1@exemple.com,adresse2@exemple.com"
+```

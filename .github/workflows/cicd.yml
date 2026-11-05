@@ -20,6 +20,9 @@
 #     2.3 Déploiement    cloud-init, version du commit, HTTPS Let's Encrypt, secrets,
 #                        RESTAURATION DE LA BASE (sauvegarde S3 chiffrée), contrôle de santé
 #     2.4 Tests de fumée site public, API, ports fermés, en-têtes, TLS
+#     2.5 Observabilité  agent CloudWatch (mémoire, disque, processus), journaux Nginx/API/
+#                        sauvegardes, filtres de métriques (HTTP 5xx, erreurs API), alarmes
+#                        et tableau de bord (Terraform, infra/aws/observability.tf) -> SNS
 #
 #   PHASE 3 — ANALYSES DE SÉCURITÉ APPROFONDIES (à la fin, en parallèle)
 #     3.1 CodeQL         analyse sémantique JavaScript + workflows GitHub Actions
@@ -29,6 +32,9 @@
 #     3.5 DAST           application reconstruite dans le runner, OWASP ZAP ACTIF
 #                        (attaques réelles sur une base jetable, jamais sur la production)
 #     3.6 Rapport        récapitulatif de toutes les étapes et URL du site
+#
+#   4 — NOTIFICATION     e-mail « pipeline réussi » aux adresses de NOTIFICATION_EMAILS
+#                        (Amazon SNS, abonnement à confirmer une fois ; SMTP si EMAIL_USER/PASS)
 #
 # Déclenchement :
 #   Le pipeline ne s'exécute QUE sur demande explicite dans un message de commit :
@@ -45,7 +51,10 @@
 #   facultatifs  : MISTRAL_API_KEY, EMAIL_USER, EMAIL_PASS, ADMIN_EMAIL, ADMIN_PASSWORD,
 #                  DB_BACKUP_PASSPHRASE, DB_BACKUP_GPG_B64, DB_BACKUP_URL, DB_BACKUP_TOKEN
 # Variables facultatives : AWS_REGION, INSTANCE_TYPE, ADMIN_SSH_CIDR, ADMIN_SSH_PUBLIC_KEY, EIP_ALLOCATION_ID,
-#                  SECURITY_GROUP_ID, MISTRAL_MODEL, LETSENCRYPT_EMAIL, ENABLE_HTTPS
+#                  SECURITY_GROUP_ID, MISTRAL_MODEL, LETSENCRYPT_EMAIL, ENABLE_HTTPS,
+#                  NOTIFICATION_EMAILS (destinataires, séparés par des virgules ; ou secret du même nom),
+#                  IAM_INSTANCE_PROFILE (défaut LabInstanceProfile, « none » = sans agent),
+#                  LOG_RETENTION_DAYS (défaut 14), SMTP_HOST, SMTP_PORT
 # Documentation : docs/deployment/cicd-pipeline.md
 # Destruction    : workflow « Destroy » (.github/workflows/destroy.yml)
 # =============================================================================
@@ -738,6 +747,7 @@ jobs:
     outputs:
       sg_id: ${{ steps.sg.outputs.sg_id }}
       eip_ip: ${{ steps.eip.outputs.ip }}
+      topic_arn: ${{ steps.sns.outputs.topic_arn }}
     steps:
       - uses: actions/checkout@v7
 
@@ -851,12 +861,67 @@ jobs:
           echo "ip=$ip" >> "$GITHUB_OUTPUT"
           echo "| IP élastique | \`$ip\` (\`$alloc\`) |" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: "Notifications : rubrique SNS et abonnements e-mail (hors Terraform)"
+        # Hors Terraform : « Destroy » ne doit pas supprimer les abonnements déjà confirmés.
+        # Chaque destinataire reçoit UNE fois un e-mail « AWS Notification - Subscription
+        # Confirmation » : cliquer « Confirm subscription » pour recevoir les notifications.
+        id: sns
+        env:
+          NOTIFY_EMAILS: ${{ secrets.NOTIFICATION_EMAILS || vars.NOTIFICATION_EMAILS }}
+        run: |
+          topic=$(aws sns create-topic --name "${PROJECT}-notifications" \
+                    --tags "Key=Project,Value=${PROJECT}" --query TopicArn --output text)
+          echo "topic_arn=$topic" >> "$GITHUB_OUTPUT"
+          IFS=', ' read -r -a emails <<<"${NOTIFY_EMAILS:-}"
+          for e in "${emails[@]}"; do [ -z "$e" ] || echo "::add-mask::$e"; done
+          if [ "${#emails[@]}" -eq 0 ]; then
+            echo "::warning::Variable NOTIFICATION_EMAILS vide : aucun destinataire."
+          fi
+          subs=$(aws sns list-subscriptions-by-topic --topic-arn "$topic" \
+                   --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output text)
+          confirmed=0; pending=0
+          for e in "${emails[@]}"; do
+            [ -n "$e" ] || continue
+            arn=$(awk -v e="$e" 'tolower($1) == tolower(e) {print $2}' <<<"$subs" | head -1)
+            if [ -z "$arn" ]; then
+              aws sns subscribe --topic-arn "$topic" --protocol email --notification-endpoint "$e" >/dev/null
+              pending=$((pending + 1))
+            elif [ "$arn" = PendingConfirmation ]; then
+              pending=$((pending + 1))
+            else
+              confirmed=$((confirmed + 1))
+            fi
+          done
+          {
+            echo "| Rubrique SNS | \`$topic\` |"
+            echo "| Abonnements e-mail | $confirmed confirmé(s), $pending en attente de confirmation |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$pending" -eq 0 ] || echo "::notice::$pending abonnement(s) SNS en attente : cliquer « Confirm subscription » dans l'e-mail reçu d'AWS."
+
+      - name: "Profil d'instance pour l'agent CloudWatch (AWS Academy : LabInstanceProfile)"
+        id: profile
+        env:
+          PROFILE: ${{ vars.IAM_INSTANCE_PROFILE || 'LabInstanceProfile' }}
+        run: |
+          if [ "$PROFILE" = none ]; then
+            name=""
+          elif aws iam get-instance-profile --instance-profile-name "$PROFILE" >/dev/null 2>&1; then
+            name="$PROFILE"
+          else
+            name=""
+            echo "::warning::Profil d'instance $PROFILE introuvable : métriques système et journaux CloudWatch indisponibles (alarmes CPU/santé EC2 conservées)."
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "| Profil d'instance (CloudWatch) | \`${name:-aucun}\` |" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Variables Terraform (ci.auto.tfvars.json, stockées avec l'état)
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           BUCKET: ${{ steps.aws.outputs.state-bucket }}
           SG_ID: ${{ steps.sg.outputs.sg_id }}
           EIP_ALLOC: ${{ steps.eip.outputs.alloc }}
+          TOPIC_ARN: ${{ steps.sns.outputs.topic_arn }}
+          IAM_PROFILE: ${{ steps.profile.outputs.name }}
           ADMIN_SSH_CIDR: ${{ vars.ADMIN_SSH_CIDR }}
           INSTANCE_TYPE: ${{ inputs.instance_type || vars.INSTANCE_TYPE || 't3.small' }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
@@ -872,12 +937,14 @@ jobs:
           cidr="${ADMIN_SSH_CIDR:-127.0.0.1/32}"
           jq -n --arg region "$AWS_REGION" --arg project "$PROJECT" --arg type "$INSTANCE_TYPE" \
                 --arg pub "$pub" --arg cidr "$cidr" --arg sg "$SG_ID" --arg eip "$EIP_ALLOC" \
-                --arg repo "$REPO_URL" --arg ref "$GIT_REF" --argjson https "$ENABLE_HTTPS" '{
+                --arg repo "$REPO_URL" --arg ref "$GIT_REF" --argjson https "$ENABLE_HTTPS" \
+                --arg topic "$TOPIC_ARN" --arg profile "$IAM_PROFILE" '{
             aws_region: $region, project_name: $project, instance_type: $type,
             key_name: "vockey", ssh_public_key: $pub, ssh_allowed_cidr: $cidr,
             security_group_id: $sg, eip_allocation_id: $eip, allocate_eip: false,
-            enable_https: $https, iam_instance_profile: "", root_volume_size: 20,
-            git_repo_url: $repo, git_ref: $ref }' > ci.auto.tfvars.json
+            enable_https: $https, iam_instance_profile: $profile, root_volume_size: 20,
+            git_repo_url: $repo, git_ref: $ref,
+            enable_observability: true, alarm_sns_topic_arn: $topic }' > ci.auto.tfvars.json
           aws s3 cp ci.auto.tfvars.json "s3://$BUCKET/$PROJECT/ci.auto.tfvars.json" --sse AES256 --only-show-errors
           {
             echo "| SSH administrateur | \`$cidr\` (+ IP du runner pendant les jobs, retirée ensuite) |"
@@ -1269,6 +1336,118 @@ jobs:
           .github/scripts/sg-ssh.sh close || true
           rm -rf ~/.ssh/id_ec2 ~/.ssh/config
 
+  observability:
+    name: "2.5 Observabilité CloudWatch (agent, journaux, alarmes)"
+    needs: [aws-preflight, terraform, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: aws-infra
+      cancel-in-progress: false
+    env:
+      EC2_HOST: ${{ needs.terraform.outputs.public_ip }}
+      INSTANCE_ID: ${{ needs.terraform.outputs.instance_id }}
+      SG_ID: ${{ needs.aws-preflight.outputs.sg_id }}
+      CW_NAMESPACE: LandolsiTires
+      LOG_RETENTION_DAYS: ${{ vars.LOG_RETENTION_DAYS || '14' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Connexion AWS
+        uses: ./.github/actions/terraform-init
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          terraform-version: ${{ env.TF_VERSION }}
+          project: ${{ env.PROJECT }}
+          init: "false"
+
+      - name: Groupes de journaux CloudWatch (rétention) et filtres de métriques
+        # Hors Terraform : les journaux restent consultables après « Destroy ».
+        run: |
+          for g in nginx-access nginx-error backend backup cloud-init; do
+            name="/$PROJECT/$g"
+            aws logs create-log-group --log-group-name "$name" --tags "Project=$PROJECT" 2>/dev/null || true
+            aws logs put-retention-policy --log-group-name "$name" --retention-in-days "$LOG_RETENTION_DAYS"
+          done
+          # Journal d'accès Nginx (format combined) : requêtes, 4xx, 5xx
+          access='[ip, ident, user, timestamp, request, status_code, bytes, referer, agent]'
+          aws logs put-metric-filter --log-group-name "/$PROJECT/nginx-access" --filter-name http-requests \
+            --filter-pattern "$access" \
+            --metric-transformations "metricName=HttpRequests,metricNamespace=$CW_NAMESPACE,metricValue=1,defaultValue=0"
+          aws logs put-metric-filter --log-group-name "/$PROJECT/nginx-access" --filter-name http-4xx \
+            --filter-pattern '[ip, ident, user, timestamp, request, status_code = 4*, bytes, referer, agent]' \
+            --metric-transformations "metricName=Http4xx,metricNamespace=$CW_NAMESPACE,metricValue=1,defaultValue=0"
+          aws logs put-metric-filter --log-group-name "/$PROJECT/nginx-access" --filter-name http-5xx \
+            --filter-pattern '[ip, ident, user, timestamp, request, status_code = 5*, bytes, referer, agent]' \
+            --metric-transformations "metricName=Http5xx,metricNamespace=$CW_NAMESPACE,metricValue=1,defaultValue=0"
+          # Journal de l'API : lignes d'erreur
+          aws logs put-metric-filter --log-group-name "/$PROJECT/backend" --filter-name api-errors \
+            --filter-pattern '?Error ?ERROR ?error ?Exception ?FATAL' \
+            --metric-transformations "metricName=ApiErrors,metricNamespace=$CW_NAMESPACE,metricValue=1,defaultValue=0"
+          {
+            echo "## 2.5 Observabilité CloudWatch"
+            echo "| Élément | Valeur |"
+            echo "|---|---|"
+            echo "| Groupes de journaux | \`/$PROJECT/{nginx-access,nginx-error,backend,backup,cloud-init}\` (rétention $LOG_RETENTION_DAYS j) |"
+            echo "| Filtres de métriques | HttpRequests, Http4xx, Http5xx, ApiErrors (\`$CW_NAMESPACE\`) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ouvrir SSH pour ce runner uniquement (juste-à-temps)
+        run: .github/scripts/sg-ssh.sh open
+
+      - name: Connexion SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: .github/scripts/ssh-setup.sh
+
+      - name: Installer et démarrer l'agent CloudWatch (scripts/configure-cloudwatch.sh)
+        id: agent
+        run: |
+          # shellcheck disable=SC2029  # variables développées volontairement côté runner
+          if ssh ec2 "sudo /opt/landolsi-src/scripts/configure-cloudwatch.sh --project '$PROJECT' --namespace '$CW_NAMESPACE' --retention '$LOG_RETENTION_DAYS'"; then
+            echo "| Agent CloudWatch | ✅ actif (mémoire, disque, swap, processus, journaux) |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "::warning::Agent CloudWatch non opérationnel (code $rc) : seules les métriques EC2 de base sont disponibles."
+            echo "| Agent CloudWatch | ⚠️ non opérationnel (code $rc) |" >> "$GITHUB_STEP_SUMMARY"
+            [ "$rc" -eq 3 ] || exit "$rc"
+          fi
+
+      - name: Vérifier l'arrivée des métriques et des journaux
+        continue-on-error: true
+        run: |
+          for _ in $(seq 1 18); do
+            m=$(aws cloudwatch list-metrics --namespace "$CW_NAMESPACE" --metric-name mem_used_percent \
+                  --dimensions "Name=InstanceId,Value=$INSTANCE_ID" --query 'length(Metrics)' --output text)
+            [ "$m" != 0 ] && break
+            sleep 10
+          done
+          streams=$(aws logs describe-log-streams --log-group-name "/$PROJECT/nginx-access" \
+                      --log-stream-name-prefix "$INSTANCE_ID" --query 'length(logStreams)' --output text || echo 0)
+          echo "| Métrique mem_used_percent reçue | $([ "$m" != 0 ] && echo ✅ || echo '⏳ pas encore') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Flux de journaux Nginx | $([ "$streams" != 0 ] && echo ✅ || echo '⏳ pas encore') |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: État des alarmes et tableau de bord
+        run: |
+          {
+            echo
+            echo "| Alarme | État |"
+            echo "|---|---|"
+            aws cloudwatch describe-alarms --alarm-name-prefix "$PROJECT-" \
+              --query 'MetricAlarms[].[AlarmName,StateValue]' --output text | awk '{print "| " $1 " | " $2 " |"}'
+            echo
+            echo "Tableau de bord : https://${AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${AWS_REGION}#dashboards/dashboard/${PROJECT}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refermer SSH et effacer la clé du runner
+        if: always()
+        run: |
+          .github/scripts/sg-ssh.sh close || true
+          rm -rf ~/.ssh/id_ec2 ~/.ssh/config
+
   smoke:
     name: "2.4 Tests de fumée (site public)"
     needs: [terraform, deploy]
@@ -1322,7 +1501,7 @@ jobs:
 
   report:
     name: "3.6 Rapport final"
-    needs: [trigger, gate, aws-preflight, terraform, deploy, smoke, codeql, semgrep, sca, iac, dast-staging]
+    needs: [trigger, gate, aws-preflight, terraform, deploy, observability, smoke, codeql, semgrep, sca, iac, dast-staging]
     if: ${{ always() && needs.trigger.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     steps:
@@ -1350,3 +1529,136 @@ jobs:
             echo "Pour supprimer la VM : **Actions > Destroy — infrastructure AWS > Run workflow** (saisir \`DESTROY\`)."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "$RESULTS" | jq -e '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled")] | length == 0' >/dev/null
+
+  # ===========================================================================
+  # 4 — NOTIFICATION E-MAIL : PIPELINE RÉUSSI
+  # ===========================================================================
+  notify:
+    name: "4. Notification e-mail (pipeline réussi)"
+    needs: [trigger, aws-preflight, terraform, deploy, report]
+    # Uniquement si le rapport final est vert (aucune étape en échec ni annulée)
+    if: ${{ always() && needs.trigger.outputs.run == 'true' && needs.report.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NOTIFY_EMAILS: ${{ secrets.NOTIFICATION_EMAILS || vars.NOTIFICATION_EMAILS }}
+      TOPIC_ARN: ${{ needs.aws-preflight.outputs.topic_arn }}
+      URL: ${{ needs.deploy.outputs.url }}
+      INSTANCE_ID: ${{ needs.terraform.outputs.instance_id }}
+      DEPLOYED: ${{ needs.trigger.outputs.deploy }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      ACTOR: ${{ github.actor }}
+      COMMIT_TITLE: ${{ github.event.head_commit.message }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Masquer les adresses des destinataires dans les journaux (dépôt public)
+        run: |
+          IFS=', ' read -r -a emails <<<"${NOTIFY_EMAILS:-}"
+          for e in "${emails[@]}"; do [ -z "$e" ] || echo "::add-mask::$e"; done
+          echo "Destinataires : ${#emails[@]}"
+
+      - name: Rédiger le message
+        run: |
+          title=$(printf '%s' "${COMMIT_TITLE:-déclenchement manuel}" | head -1)
+          if [ "$DEPLOYED" = true ]; then mode="CI + déploiement AWS"; else mode="CI sans déploiement ([ci])"; fi
+          subject="✅ LANDOLSI TIRES — pipeline réussi (${GITHUB_SHA::7})"
+          dashboard="https://${AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${AWS_REGION}#dashboards/dashboard/${PROJECT}"
+          {
+            echo "Bonjour,"
+            echo
+            echo "Le pipeline CI/CD de LANDOLSI TIRES s'est terminé avec SUCCÈS."
+            echo
+            echo "Mode            : $mode"
+            echo "Commit          : ${GITHUB_SHA::7} — $title"
+            echo "Branche         : $GITHUB_REF_NAME"
+            echo "Déclenché par   : $ACTOR"
+            echo "Date (UTC)      : $(date -u '+%d/%m/%Y %H:%M')"
+            if [ "$DEPLOYED" = true ]; then
+              echo "Site en ligne   : ${URL:-?}"
+              echo "Instance EC2    : ${INSTANCE_ID:-?}"
+              echo "Supervision     : $dashboard"
+            fi
+            echo "Détail du run   : $RUN_URL"
+            echo
+            echo "Étapes validées : qualité, tests, build, secrets, analyses de sécurité (SAST, SCA, IaC, DAST)"
+            [ "$DEPLOYED" != true ] || echo "                  + VM Terraform, déploiement, observabilité CloudWatch, tests de fumée"
+            echo
+            echo "— Message automatique GitHub Actions"
+          } > "$RUNNER_TEMP/message.txt"
+          echo "SUBJECT=$subject" >> "$GITHUB_ENV"
+          cat "$RUNNER_TEMP/message.txt"
+
+      - name: "Connexion AWS (pour SNS)"
+        id: aws
+        continue-on-error: true
+        uses: ./.github/actions/terraform-init
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          terraform-version: ${{ env.TF_VERSION }}
+          project: ${{ env.PROJECT }}
+          init: "false"
+
+      - name: Envoi par Amazon SNS (abonnés confirmés)
+        id: sns
+        if: steps.aws.outcome == 'success'
+        continue-on-error: true
+        env:
+          ACCOUNT: ${{ steps.aws.outputs.account-id }}
+        run: |
+          topic="${TOPIC_ARN:-arn:aws:sns:${AWS_REGION}:${ACCOUNT}:${PROJECT}-notifications}"
+          confirmed=$(aws sns list-subscriptions-by-topic --topic-arn "$topic" \
+            --query "length(Subscriptions[?Protocol=='email' && SubscriptionArn!='PendingConfirmation'])" --output text)
+          echo "Abonnés confirmés : $confirmed"
+          if [ "$confirmed" = 0 ]; then
+            echo "::warning::Aucun abonnement SNS confirmé : cliquer « Confirm subscription » dans l'e-mail d'AWS (envoyé au 1er déploiement)."
+            exit 1
+          fi
+          id=$(aws sns publish --topic-arn "$topic" --subject "${SUBJECT:0:99}" \
+                 --message "file://$RUNNER_TEMP/message.txt" --query MessageId --output text)
+          echo "✉️ Notification SNS envoyée ($confirmed abonné(s), message \`$id\`)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Envoi par SMTP (si les secrets EMAIL_USER / EMAIL_PASS existent)
+        id: smtp
+        continue-on-error: true
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '465' }}
+        run: |
+          if [ -z "$EMAIL_USER" ] || [ -z "$EMAIL_PASS" ] || [ -z "$NOTIFY_EMAILS" ]; then
+            echo "SMTP non configuré (EMAIL_USER/EMAIL_PASS ou NOTIFICATION_EMAILS absents)."
+            exit 1
+          fi
+          python3 - <<'EOF'
+          import os, re, smtplib, ssl
+          from email.message import EmailMessage
+          to = [a for a in re.split(r"[,\s]+", os.environ["NOTIFY_EMAILS"]) if a]
+          msg = EmailMessage()
+          msg["Subject"] = os.environ["SUBJECT"]
+          msg["From"] = f"LANDOLSI TIRES CI/CD <{os.environ['EMAIL_USER']}>"
+          msg["To"] = ", ".join(to)
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "message.txt"), encoding="utf-8") as f:
+              msg.set_content(f.read())
+          with smtplib.SMTP_SSL(os.environ["SMTP_HOST"], int(os.environ["SMTP_PORT"]),
+                                context=ssl.create_default_context(), timeout=30) as s:
+              s.login(os.environ["EMAIL_USER"], os.environ["EMAIL_PASS"])
+              s.send_message(msg)
+          print(f"E-mail envoyé à {len(to)} destinataire(s).")
+          EOF
+          echo "✉️ Notification SMTP envoyée." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bilan de la notification
+        env:
+          SNS: ${{ steps.sns.outcome }}
+          SMTP: ${{ steps.smtp.outcome }}
+        run: |
+          echo "SNS : $SNS — SMTP : $SMTP"
+          if [ "$SNS" != success ] && [ "$SMTP" != success ]; then
+            echo "::warning::Notification non envoyée : confirmer l'abonnement SNS (e-mail d'AWS) ou ajouter les secrets EMAIL_USER/EMAIL_PASS."
+            echo "⚠️ Notification e-mail non envoyée (voir les avertissements)." >> "$GITHUB_STEP_SUMMARY"
+          fi

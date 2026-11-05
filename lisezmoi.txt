@@ -183,3 +183,24 @@ Procédure complète : docs/deployment/database-backup-restore.md §6. Après
 chiffrement, mettre à jour l'archive dans le dépôt privé ET les deux fichiers
 db/backup/*.sha256* dans ce dépôt, sinon le pipeline refuse l'archive.
 05/11/2026
+
+7. OBSERVABILITÉ CLOUDWATCH ET NOTIFICATION E-MAIL (5 novembre 2026)
+--------------------------------------------------------------------
+- Nouveau job "2.5 Observabilité CloudWatch" (après le déploiement) :
+    * agent CloudWatch sur la VM (scripts/configure-cloudwatch.sh) : mémoire,
+      swap, disque, processus node/postgres/nginx (espace de noms LandolsiTires) ;
+    * journaux /landolsi-tires/{nginx-access,nginx-error,backend,backup,cloud-init},
+      rétention 14 jours, CONSERVÉS après Destroy ;
+    * filtres de métriques HttpRequests, Http4xx, Http5xx, ApiErrors.
+- infra/aws/observability.tf : 6 alarmes (CPU, santé EC2, mémoire, disque,
+  HTTP 5xx, erreurs API) + tableau de bord CloudWatch "landolsi-tires".
+- Rubrique SNS landolsi-tires-notifications (créée par le pipeline, hors
+  Terraform) : alarmes + e-mail "pipeline réussi" (job "4. Notification").
+- Destinataires : variable de dépôt NOTIFICATION_EMAILS (adresses séparées par
+  des virgules, jamais écrites dans le dépôt public, masquées dans les journaux).
+- A FAIRE UNE FOIS : au 1er run [deploy], chaque destinataire reçoit un e-mail
+  "AWS Notification - Subscription Confirmation" -> cliquer "Confirm subscription".
+  Sans confirmation, SNS n'envoie rien ; en complément, les secrets
+  EMAIL_USER/EMAIL_PASS (Gmail, mot de passe d'application) activent un envoi SMTP direct.
+- Profil d'instance : LabInstanceProfile (variable IAM_INSTANCE_PROFILE ;
+  "none" = sans agent, seules les métriques EC2 de base restent).

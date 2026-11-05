@@ -46,3 +46,8 @@ output "root_volume_id" {
 output "security_group_id" {
   value = local.security_group_id
 }
+
+output "cloudwatch_dashboard_url" {
+  description = "Tableau de bord CloudWatch (métriques, alarmes, journaux)"
+  value       = var.enable_observability ? "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards/dashboard/${var.project_name}" : ""
+}
