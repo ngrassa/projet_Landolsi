@@ -182,3 +182,4 @@ e) Pour utiliser plus tard le job restore-ec2 :
 Procédure complète : docs/deployment/database-backup-restore.md §6. Après
 chiffrement, mettre à jour l'archive dans le dépôt privé ET les deux fichiers
 db/backup/*.sha256* dans ce dépôt, sinon le pipeline refuse l'archive.
+05/11/2026
